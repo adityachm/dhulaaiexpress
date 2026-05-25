@@ -214,7 +214,7 @@
   const navStyle = document.createElement('style');
   navStyle.textContent = `
     .nav.scrolled {
-      height: 66px;
+      height: 76px;
       box-shadow: 0 4px 40px rgba(0,0,0,0.3);
     }
     .nav-links a.active { color: var(--white); }
