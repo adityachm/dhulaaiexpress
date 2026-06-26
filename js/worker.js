@@ -187,6 +187,15 @@ document.getElementById('f-phone').addEventListener('blur', async function() {
 
   document.getElementById('f-name').value = data.customer.name;
 
+  // Skip OTP if this customer's phone has already been verified before
+  if (data.customer.phone_verified) {
+    phoneVerified = true;
+    document.getElementById('otp-block').classList.add('hidden');
+    document.getElementById('phone-verified-badge').classList.remove('hidden');
+    document.getElementById('otp-send-btn').textContent = 'Verified ✓';
+    document.getElementById('otp-send-btn').disabled = true;
+  }
+
   // Autofill latest vehicle
   if (data.vehicles && data.vehicles.length) {
     const v = data.vehicles[0];
@@ -276,7 +285,9 @@ document.getElementById('f-phone').addEventListener('input', function() {
   phoneVerified = false;
   document.getElementById('otp-block').classList.add('hidden');
   document.getElementById('phone-verified-badge').classList.add('hidden');
-  document.getElementById('otp-send-btn').textContent = 'Send OTP';
+  const btn = document.getElementById('otp-send-btn');
+  btn.textContent = 'Send OTP';
+  btn.disabled = false;
 });
 
 // ── Form submit ────────────────────────────────────────────────────────

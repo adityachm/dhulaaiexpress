@@ -34,6 +34,9 @@ export async function onRequest(context) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
+    // Clean up rows expired more than 24 hours ago (fire-and-forget)
+    env.DB.prepare("DELETE FROM otps WHERE datetime(expires_at) < datetime('now', '-24 hours')").run().catch(() => {});
+
     await env.DB.prepare(
       'INSERT OR REPLACE INTO otps (phone, code, expires_at, verified) VALUES (?, ?, ?, 0)'
     ).bind(phone.trim(), code, expiresAt).run();
@@ -58,6 +61,8 @@ export async function onRequest(context) {
 
     if (row) {
       await env.DB.prepare('UPDATE otps SET verified = 1 WHERE phone = ?').bind(phone.trim()).run();
+      // Permanently mark the customer's phone as verified so they skip OTP on future visits
+      await env.DB.prepare('UPDATE customers SET phone_verified = 1 WHERE phone = ?').bind(phone.trim()).run();
       return json({ valid: true });
     }
     return json({ valid: false, error: 'Invalid or expired OTP' });
