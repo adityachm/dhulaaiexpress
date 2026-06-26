@@ -540,37 +540,96 @@ window.saveSetting = async function(key, value) {
 
 function renderCheckpointTemplates(templates) {
   const serviceLabels = { top: 'Top Wash', normal: 'Normal Wash', foam: 'Foam Wash', interior: 'Interior Cleaning', rubbing: 'Full Rubbing', pickup_drop: 'Pickup & Drop' };
-  document.getElementById('checkpoint-templates').innerHTML = templates.map(t => {
+  const container = document.getElementById('checkpoint-templates');
+  container.innerHTML = '';
+
+  templates.forEach((t, ti) => {
     const steps = JSON.parse(t.steps);
-    return `
-      <div style="margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;">${serviceLabels[t.service_key] || t.service_key}</div>
-        <div id="cpt-${t.service_key}">
-          ${steps.map((s, i) => `
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-              <span style="color:var(--text3);font-size:12px;width:18px;">${i+1}.</span>
-              <input type="text" value="${s}" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:13px;"
-                data-key="${t.service_key}" data-idx="${i}" onchange="markCptDirty('${t.service_key}')">
-            </div>
-          `).join('')}
-        </div>
-        <button class="btn btn-ghost btn-sm mt8" onclick="saveCptTemplate('${t.service_key}')">Save</button>
-      </div>
-    `;
-  }).join('<hr class="divider">');
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = '16px';
+
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;';
+    label.textContent = serviceLabels[t.service_key] || t.service_key;
+    wrap.appendChild(label);
+
+    const list = document.createElement('div');
+    list.id = `cpt-${t.service_key}`;
+    wrap.appendChild(list);
+
+    steps.forEach(s => addCptRow(list, t.service_key, s));
+
+    // + Add Step button
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-ghost btn-sm mt8';
+    addBtn.textContent = '+ Add Step';
+    addBtn.style.marginRight = '8px';
+    addBtn.onclick = () => { addCptRow(list, t.service_key, ''); renumberCptRows(list); };
+    wrap.appendChild(addBtn);
+
+    // Save button
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-primary btn-sm mt8';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => saveCptTemplate(t.service_key);
+    wrap.appendChild(saveBtn);
+
+    container.appendChild(wrap);
+    if (ti < templates.length - 1) {
+      const hr = document.createElement('hr');
+      hr.className = 'divider';
+      container.appendChild(hr);
+    }
+  });
 }
 
-window.markCptDirty = function() {};
+function addCptRow(list, serviceKey, value) {
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+
+  const num = document.createElement('span');
+  num.className = 'cpt-num';
+  num.style.cssText = 'color:var(--text3);font-size:12px;width:20px;flex-shrink:0;';
+  row.appendChild(num);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = value;
+  input.dataset.key = serviceKey;
+  input.style.cssText = 'flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:13px;';
+  input.placeholder = 'Step description…';
+  row.appendChild(input);
+
+  const del = document.createElement('button');
+  del.textContent = '✕';
+  del.title = 'Remove step';
+  del.style.cssText = 'background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0;';
+  del.onclick = () => {
+    row.remove();
+    renumberCptRows(list);
+  };
+  row.appendChild(del);
+
+  list.appendChild(row);
+  renumberCptRows(list);
+  return row;
+}
+
+function renumberCptRows(list) {
+  list.querySelectorAll('.cpt-num').forEach((el, i) => { el.textContent = `${i + 1}.`; });
+}
 
 window.saveCptTemplate = async function(serviceKey) {
-  const inputs = document.querySelectorAll(`[data-key="${serviceKey}"]`);
+  const inputs = document.querySelectorAll(`#cpt-${serviceKey} [data-key="${serviceKey}"]`);
   const steps = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
-  await apiRaw('/api/checkpoints', {
+  if (!steps.length) { alert('Add at least one step.'); return; }
+  const r = await apiRaw('/api/checkpoints', {
     method: 'PUT',
     headers: { 'X-Admin-Secret': SECRET, 'Content-Type': 'application/json' },
     body: JSON.stringify({ service_key: serviceKey, steps }),
   });
-  alert('Checkpoint template saved!');
+  if (r.ok) alert(`✓ "${serviceKey}" steps saved!`);
+  else alert('Failed to save. Try again.');
 };
 
 function renderWaTemplates() {

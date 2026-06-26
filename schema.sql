@@ -50,33 +50,7 @@ CREATE TABLE IF NOT EXISTS checkpoint_templates (
   updated_at  TEXT DEFAULT (datetime('now'))
 );
 
--- Jobs
-CREATE TABLE IF NOT EXISTS jobs (
-  id               INTEGER PRIMARY KEY AUTOINCREMENT,
-  customer_id      INTEGER NOT NULL REFERENCES customers(id),
-  vehicle_id       INTEGER NOT NULL REFERENCES vehicles(id),
-  car_type         TEXT    NOT NULL,
-  wash_type        TEXT    NOT NULL DEFAULT '',
-  addons           TEXT    NOT NULL DEFAULT '[]', -- JSON [{id, name, price}]
-  is_monthly       INTEGER NOT NULL DEFAULT 0,
-  pickup_drop      INTEGER NOT NULL DEFAULT 0,
-  pickup_address   TEXT    NOT NULL DEFAULT '',
-  services_summary TEXT    NOT NULL DEFAULT '',
-  price            INTEGER NOT NULL DEFAULT 0,
-  amount_paid      INTEGER NOT NULL DEFAULT 0,
-  payment_mode     TEXT    NOT NULL DEFAULT 'cash', -- cash | upi | sub
-  assigned_worker  TEXT    NOT NULL DEFAULT '',
-  notes            TEXT    NOT NULL DEFAULT '',
-  subscription_id  INTEGER REFERENCES subscriptions(id),
-  checkpoints      TEXT    NOT NULL DEFAULT '[]', -- JSON [{service_key, label, steps:[{label,done,done_at}]}]
-  status           TEXT    NOT NULL DEFAULT 'received', -- received | in_progress | ready | delivered
-  created_at       TEXT    DEFAULT (datetime('now')),
-  started_at       TEXT,
-  ready_at         TEXT,
-  delivered_at     TEXT
-);
-
--- Monthly subscriptions
+-- Monthly subscriptions (defined before jobs so the FK reference is valid)
 CREATE TABLE IF NOT EXISTS subscriptions (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   customer_id  INTEGER NOT NULL REFERENCES customers(id),
@@ -91,6 +65,32 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   end_date     TEXT    NOT NULL,
   is_active    INTEGER NOT NULL DEFAULT 1,
   created_at   TEXT    DEFAULT (datetime('now'))
+);
+
+-- Jobs (after subscriptions so the FK reference subscription_id is valid)
+CREATE TABLE IF NOT EXISTS jobs (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id      INTEGER NOT NULL REFERENCES customers(id),
+  vehicle_id       INTEGER NOT NULL REFERENCES vehicles(id),
+  car_type         TEXT    NOT NULL,
+  wash_type        TEXT    NOT NULL DEFAULT '',
+  addons           TEXT    NOT NULL DEFAULT '[]',
+  is_monthly       INTEGER NOT NULL DEFAULT 0,
+  pickup_drop      INTEGER NOT NULL DEFAULT 0,
+  pickup_address   TEXT    NOT NULL DEFAULT '',
+  services_summary TEXT    NOT NULL DEFAULT '',
+  price            INTEGER NOT NULL DEFAULT 0,
+  amount_paid      INTEGER NOT NULL DEFAULT 0,
+  payment_mode     TEXT    NOT NULL DEFAULT 'cash',
+  assigned_worker  TEXT    NOT NULL DEFAULT '',
+  notes            TEXT    NOT NULL DEFAULT '',
+  subscription_id  INTEGER REFERENCES subscriptions(id),
+  checkpoints      TEXT    NOT NULL DEFAULT '[]',
+  status           TEXT    NOT NULL DEFAULT 'received',
+  created_at       TEXT    DEFAULT (datetime('now')),
+  started_at       TEXT,
+  ready_at         TEXT,
+  delivered_at     TEXT
 );
 
 -- Key/value settings
