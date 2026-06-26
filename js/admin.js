@@ -585,13 +585,23 @@ function renderCheckpointTemplates(templates) {
 
 function addCptRow(list, serviceKey, value) {
   const row = document.createElement('div');
-  row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+  row.draggable = true;
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:4px;cursor:default;border-radius:6px;transition:background .1s;';
 
+  // Drag handle
+  const handle = document.createElement('span');
+  handle.textContent = '⠿';
+  handle.title = 'Drag to reorder';
+  handle.style.cssText = 'color:var(--text3);font-size:16px;cursor:grab;flex-shrink:0;padding:0 2px;user-select:none;';
+  row.appendChild(handle);
+
+  // Step number
   const num = document.createElement('span');
   num.className = 'cpt-num';
   num.style.cssText = 'color:var(--text3);font-size:12px;width:20px;flex-shrink:0;';
   row.appendChild(num);
 
+  // Input
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value;
@@ -600,15 +610,35 @@ function addCptRow(list, serviceKey, value) {
   input.placeholder = 'Step description…';
   row.appendChild(input);
 
+  // Delete button
   const del = document.createElement('button');
   del.textContent = '✕';
   del.title = 'Remove step';
   del.style.cssText = 'background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:0 4px;flex-shrink:0;';
-  del.onclick = () => {
-    row.remove();
-    renumberCptRows(list);
-  };
+  del.onclick = () => { row.remove(); renumberCptRows(list); };
   row.appendChild(del);
+
+  // ── Drag-and-drop ────────────────────────────────────────────────
+  row.addEventListener('dragstart', e => {
+    e.dataTransfer.effectAllowed = 'move';
+    row.style.opacity = '0.4';
+    list._dragging = row;
+  });
+  row.addEventListener('dragend', () => {
+    row.style.opacity = '';
+    list._dragging = null;
+    list.querySelectorAll('[data-drop-indicator]').forEach(el => el.removeAttribute('data-drop-indicator'));
+    renumberCptRows(list);
+  });
+  row.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const dragging = list._dragging;
+    if (!dragging || dragging === row) return;
+    const box = row.getBoundingClientRect();
+    const after = e.clientY > box.top + box.height / 2;
+    if (after) row.after(dragging); else row.before(dragging);
+  });
 
   list.appendChild(row);
   renumberCptRows(list);
