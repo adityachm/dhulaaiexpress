@@ -1,3 +1,5 @@
+import { sendStatusLink } from '../_lib/wa.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -172,6 +174,17 @@ export async function onRequest(context) {
       sub_id,
       JSON.stringify(checkpoints),
     ).run();
+
+    // Auto-send WhatsApp status link (non-blocking — don't fail job creation if WA fails)
+    try {
+      const shopUrl = env.SHOP_URL || 'https://dhulaaiexpress.com';
+      const statusUrl = `${shopUrl}/status?phone=${encodeURIComponent(phone.trim())}`;
+      const firstName = name.trim().split(' ')[0];
+      const vehicleDesc = [make_model, color].filter(Boolean).join(' ') || car_type;
+      await sendStatusLink(env, phone.trim(), firstName, vehicleDesc, reg_number.trim().toUpperCase(), statusUrl);
+    } catch (e) {
+      console.error('Auto WA status link failed:', e.message);
+    }
 
     return new Response(JSON.stringify({ id: meta.last_row_id, customer_id: customer.id }), {
       status: 201,

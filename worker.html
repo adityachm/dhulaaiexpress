@@ -76,14 +76,38 @@
 
       <form id="car-form" autocomplete="off">
 
-        <div class="form-row">
-          <div class="form-group">
-            <label>Customer Phone *</label>
-            <input id="f-phone" type="tel" placeholder="9876543210" required>
+        <!-- Phone + OTP verification -->
+        <div class="form-group">
+          <label>Customer Phone *</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="f-phone" type="tel" placeholder="9876543210" required style="flex:1;">
+            <button type="button" class="btn btn-primary btn-sm" id="otp-send-btn" onclick="sendOTP()">Send OTP</button>
           </div>
+        </div>
+
+        <!-- OTP input (shown after Send OTP is clicked) -->
+        <div id="otp-block" class="hidden" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">
+            📱 OTP sent to customer's WhatsApp. Ask them for the code.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="f-otp" type="number" placeholder="6-digit OTP" maxlength="6"
+              style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:16px;letter-spacing:4px;text-align:center;outline:none;">
+            <button type="button" class="btn btn-green btn-sm" onclick="verifyOTP()">Verify</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="sendOTP()">Resend</button>
+          </div>
+          <div id="otp-status" style="font-size:13px;margin-top:8px;"></div>
+        </div>
+
+        <div class="form-row">
           <div class="form-group">
             <label>Owner Name *</label>
             <input id="f-name" type="text" placeholder="Ramesh Kumar" required>
+          </div>
+          <div class="form-group" style="align-self:flex-end;">
+            <div id="phone-verified-badge" class="hidden" style="background:#052e16;border:1px solid var(--green);color:var(--green);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;">
+              ✓ Phone verified
+            </div>
           </div>
         </div>
 

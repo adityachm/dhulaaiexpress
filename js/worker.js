@@ -2,9 +2,10 @@ import { sendStatus, setAuthHeaders, loadSettings } from './whatsapp.js';
 
 // ── State ──────────────────────────────────────────────────────────────
 let PIN = '';
-let pricing = null;       // {car_types, wash_types, wash, monthly, addons}
-let activeSub = null;     // customer's active subscription (from autofill)
+let pricing = null;
+let activeSub = null;
 let boardJobs = [];
+let phoneVerified = false;
 
 // ── Auth helpers ───────────────────────────────────────────────────────
 function api(path, opts = {}) {
@@ -175,11 +176,74 @@ function hideSub() {
   document.getElementById('sub-banner').classList.add('hidden');
 }
 
+// ── OTP ────────────────────────────────────────────────────────────────
+window.sendOTP = async function() {
+  const phone = document.getElementById('f-phone').value.trim();
+  if (phone.length < 10) { alert('Enter a valid 10-digit phone number first.'); return; }
+
+  const btn = document.getElementById('otp-send-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+
+  const r = await api('/api/otp?action=send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  });
+  const data = await r.json().catch(() => ({}));
+
+  btn.disabled = false; btn.textContent = 'Resend OTP';
+  document.getElementById('otp-block').classList.remove('hidden');
+  document.getElementById('otp-status').textContent = data.message || (data.sent ? 'OTP sent!' : 'Failed to send OTP.');
+  document.getElementById('otp-status').style.color = data.sent ? 'var(--green)' : 'var(--orange)';
+  phoneVerified = false;
+  document.getElementById('phone-verified-badge').classList.add('hidden');
+};
+
+window.verifyOTP = async function() {
+  const phone = document.getElementById('f-phone').value.trim();
+  const code  = document.getElementById('f-otp').value.trim();
+  if (!code) { alert('Enter the OTP first.'); return; }
+
+  const r = await api('/api/otp?action=verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, code }),
+  });
+  const data = await r.json().catch(() => ({}));
+
+  const statusEl = document.getElementById('otp-status');
+  if (data.valid) {
+    phoneVerified = true;
+    statusEl.textContent = '✓ Phone number verified!';
+    statusEl.style.color = 'var(--green)';
+    document.getElementById('otp-block').classList.add('hidden');
+    document.getElementById('phone-verified-badge').classList.remove('hidden');
+  } else {
+    phoneVerified = false;
+    statusEl.textContent = '✗ ' + (data.error || 'Invalid OTP. Try again or resend.');
+    statusEl.style.color = 'var(--red)';
+  }
+};
+
+// Reset OTP state when phone number changes
+document.getElementById('f-phone').addEventListener('input', function() {
+  phoneVerified = false;
+  document.getElementById('otp-block').classList.add('hidden');
+  document.getElementById('phone-verified-badge').classList.add('hidden');
+  document.getElementById('otp-send-btn').textContent = 'Send OTP';
+});
+
 // ── Form submit ────────────────────────────────────────────────────────
 document.getElementById('car-form').addEventListener('submit', async e => {
   e.preventDefault();
   const err = document.getElementById('form-err');
   err.textContent = '';
+
+  if (!phoneVerified) {
+    err.textContent = 'Please verify the customer\'s phone number with OTP before creating the job.';
+    return;
+  }
+
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; btn.textContent = 'Creating…';
 
@@ -233,16 +297,15 @@ document.getElementById('car-form').addEventListener('submit', async e => {
   });
 
   if (r.ok) {
-    const job = await r.json();
-    // Offer WhatsApp received message
-    const sendWa = confirm(`Job created! Send a "Car Received" WhatsApp to ${body.phone}?`);
-    if (sendWa) {
-      const fullJob = await api(`/api/jobs/${job.id}`).then(r => r.json());
-      await sendStatus(fullJob, 'received');
-    }
+    // Status link auto-sent via server. Reset form.
     e.target.reset();
     hideSub(); activeSub = null;
+    phoneVerified = false;
     document.getElementById('price-display').textContent = '₹0';
+    document.getElementById('phone-verified-badge').classList.add('hidden');
+    document.getElementById('otp-block').classList.add('hidden');
+    document.getElementById('otp-send-btn').textContent = 'Send OTP';
+    alert('✅ Job created! Status link sent to customer\'s WhatsApp automatically.');
     switchTab('board', document.querySelector('[data-tab="board"]'));
   } else {
     const msg = await r.text();

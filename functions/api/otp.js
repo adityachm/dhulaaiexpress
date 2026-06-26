@@ -1,0 +1,65 @@
+import { sendOTP } from '../_lib/wa.js';
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Secret, X-Worker-Pin',
+};
+
+function role(request, env) {
+  if (request.headers.get('X-Admin-Secret') === env.ADMIN_SECRET) return 'admin';
+  if (request.headers.get('X-Worker-Pin') === env.WORKER_PIN) return 'worker';
+  return null;
+}
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status, headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+}
+
+export async function onRequest(context) {
+  const { request, env } = context;
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: CORS });
+  if (!role(request, env)) return new Response('Unauthorized', { status: 401, headers: CORS });
+
+  const url = new URL(request.url);
+  const action = url.searchParams.get('action');
+  const body = await request.json().catch(() => ({}));
+
+  // ── Send OTP ─────────────────────────────────────────────────────────
+  if (action === 'send') {
+    const { phone } = body;
+    if (!phone) return json({ error: 'Phone required' }, 400);
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+    await env.DB.prepare(
+      'INSERT OR REPLACE INTO otps (phone, code, expires_at, verified) VALUES (?, ?, ?, 0)'
+    ).bind(phone.trim(), code, expiresAt).run();
+
+    const sent = await sendOTP(env, phone, code);
+    return json({ sent, message: sent ? 'OTP sent via WhatsApp' : 'WhatsApp unavailable — check credentials' });
+  }
+
+  // ── Verify OTP ────────────────────────────────────────────────────────
+  if (action === 'verify') {
+    const { phone, code } = body;
+    if (!phone || !code) return json({ valid: false, error: 'Phone and code required' }, 400);
+
+    const row = await env.DB.prepare(
+      `SELECT * FROM otps WHERE phone = ? AND code = ? AND verified = 0
+       AND datetime(expires_at) > datetime('now')`
+    ).bind(phone.trim(), code.trim()).first();
+
+    if (row) {
+      await env.DB.prepare('UPDATE otps SET verified = 1 WHERE phone = ?').bind(phone.trim()).run();
+      return json({ valid: true });
+    }
+    return json({ valid: false, error: 'Invalid or expired OTP' });
+  }
+
+  return json({ error: 'Unknown action — use ?action=send or ?action=verify' }, 400);
+}
