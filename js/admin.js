@@ -65,7 +65,14 @@ async function enterDashboard() {
 }
 
 async function init() {
-  await Promise.all([loadDash(), loadPricing()]);
+  await Promise.all([loadDash(), loadPricing(), loadCars(), loadSubs()]);
+  // Auto-refresh every 60 seconds
+  setInterval(() => {
+    const activeTab = document.querySelector('.nav-tabs button.active')?.dataset?.tab;
+    if (activeTab === 'dash')  loadDash();
+    if (activeTab === 'cars')  loadCars();
+    if (activeTab === 'subs')  loadSubs();
+  }, 60000);
 }
 
 window.logout = function() { clearSession(); SECRET = ''; location.reload(); };

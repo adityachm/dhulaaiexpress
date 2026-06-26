@@ -64,6 +64,11 @@ async function enterDashboard() {
 
 async function init() {
   await Promise.all([loadPricing(), loadBoard(), loadSettings()]);
+  // Auto-refresh board every 60 seconds
+  setInterval(() => {
+    const activeTab = document.querySelector('.nav-tabs button.active')?.dataset?.tab;
+    if (activeTab === 'board') loadBoard();
+  }, 60000);
 }
 
 function logout() {
