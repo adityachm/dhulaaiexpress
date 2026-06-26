@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dhulaai Express — Admin Panel</title>
+  <link rel="stylesheet" href="/css/panel.css">
+</head>
+<body>
+
+<!-- ── Login ──────────────────────────────────────────────────────────── -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="logo">🚗 Dhulaai Express</div>
+    <div class="sub">Admin Panel</div>
+    <form id="login-form">
+      <div id="login-err" class="err"></div>
+      <input id="login-pw" type="password" placeholder="Admin password" autocomplete="off">
+      <button type="submit" class="btn btn-gold btn-full">Login</button>
+    </form>
+  </div>
+</div>
+
+<!-- ── Dashboard ──────────────────────────────────────────────────────── -->
+<div id="dashboard" class="hidden">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="brand">Dhulaai Express</span>
+      <span class="role-badge">Admin</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="active" data-tab="dash"  onclick="switchTab('dash',this)">Dashboard</button>
+      <button data-tab="summary"              onclick="switchTab('summary',this)">Summary</button>
+      <button data-tab="cars"                 onclick="switchTab('cars',this)">Cars</button>
+      <button data-tab="subs"                 onclick="switchTab('subs',this)">Subscriptions</button>
+      <button data-tab="manage"               onclick="switchTab('manage',this)">Manage</button>
+    </div>
+    <button class="logout" onclick="logout()">Logout</button>
+  </div>
+
+  <!-- ── Dashboard ─────────────────────────────────────────────────── -->
+  <div id="tab-dash" class="page active">
+    <div class="section-header" style="margin-bottom:20px;">
+      <h2>Today at a Glance</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadDash()">↻ Refresh</button>
+    </div>
+    <div class="tiles" id="dash-tiles">
+      <div class="tile gold"><div class="tile-val" id="tile-today">—</div><div class="tile-lbl">Cars Today</div></div>
+      <div class="tile green"><div class="tile-val" id="tile-revenue">—</div><div class="tile-lbl">Revenue Today</div></div>
+      <div class="tile orange"><div class="tile-val" id="tile-inprog">—</div><div class="tile-lbl">In Progress</div></div>
+      <div class="tile blue"><div class="tile-val" id="tile-ready">—</div><div class="tile-lbl">Ready for Pickup</div></div>
+    </div>
+
+    <div class="section-header" style="margin-top:24px;margin-bottom:12px;">
+      <h2>Live Board (Today)</h2>
+    </div>
+    <div class="board" id="admin-board">
+      <div>
+        <div class="column-title"><span class="dot dot-received"></span>Received</div>
+        <div id="adm-col-received"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+      <div>
+        <div class="column-title"><span class="dot dot-in_progress"></span>In Progress</div>
+        <div id="adm-col-in_progress"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+      <div>
+        <div class="column-title"><span class="dot dot-ready"></span>Ready</div>
+        <div id="adm-col-ready"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+      <div>
+        <div class="column-title"><span class="dot dot-delivered"></span>Delivered</div>
+        <div id="adm-col-delivered"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Summary ───────────────────────────────────────────────────── -->
+  <div id="tab-summary" class="page">
+    <div class="section-header">
+      <h2>Business Summary</h2>
+    </div>
+    <div class="range-bar">
+      <button class="active" onclick="loadSummary('today',this)">Today</button>
+      <button onclick="loadSummary('week',this)">This Week</button>
+      <button onclick="loadSummary('month',this)">This Month</button>
+      <button onclick="showCustomRange()">Custom Range</button>
+    </div>
+    <div id="custom-range" class="hidden" style="display:none;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+      <input type="date" id="range-from" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;">
+      <span style="color:var(--text2);">to</span>
+      <input type="date" id="range-to" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="loadCustomSummary()">Apply</button>
+    </div>
+
+    <div id="summary-content">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </div>
+
+  <!-- ── Cars / Customers ───────────────────────────────────────────── -->
+  <div id="tab-cars" class="page">
+    <div class="section-header">
+      <h2>Cars &amp; Customers</h2>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="car-search" placeholder="Search by reg number or phone…" oninput="filterCars()">
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Reg No</th><th>Owner</th><th>Phone</th><th>Car Type</th>
+            <th>Service</th><th>Amount</th><th>Status</th><th>Date</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="cars-body"></tbody>
+      </table>
+    </div>
+    <div id="cars-empty" class="empty-state hidden">No records found.</div>
+  </div>
+
+  <!-- ── Subscriptions ──────────────────────────────────────────────── -->
+  <div id="tab-subs" class="page">
+    <div class="section-header">
+      <h2>Subscriptions</h2>
+      <button class="btn btn-gold btn-sm" onclick="openNewSubModal()">+ New / Renew</button>
+    </div>
+    <div id="subs-expiring" class="hidden card" style="border-color:var(--orange);margin-bottom:16px;padding:12px 16px;">
+      <span class="sub-expiring">⚠ Expiring within 7 days: </span><span id="subs-expiring-list"></span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Customer</th><th>Phone</th><th>Plan</th><th>Washes</th><th>Expiry</th><th>Price</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="subs-body"></tbody>
+      </table>
+    </div>
+    <div id="subs-empty" class="empty-state hidden">No active subscriptions.</div>
+  </div>
+
+  <!-- ── Manage ─────────────────────────────────────────────────────── -->
+  <div id="tab-manage" class="page">
+    <div class="section-header"><h2>Manage</h2></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1000px;">
+
+      <!-- Wash prices -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;">One-time Wash Prices</h3>
+        <div id="wash-price-table"></div>
+      </div>
+
+      <!-- Monthly prices -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;">Monthly Package Prices</h3>
+        <div id="monthly-price-table"></div>
+      </div>
+
+      <!-- Add-ons -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;">Add-on Prices</h3>
+        <div id="addon-price-table"></div>
+      </div>
+
+      <!-- Settings -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:15px;">Shop Settings</h3>
+        <div id="settings-form"></div>
+      </div>
+
+    </div>
+
+    <!-- Checkpoint templates (full width) -->
+    <div class="card" style="margin-top:20px;max-width:1000px;">
+      <h3 style="margin-bottom:14px;font-size:15px;">Checkpoint Templates</h3>
+      <div id="checkpoint-templates"></div>
+    </div>
+
+    <!-- WhatsApp templates -->
+    <div class="card" style="margin-top:20px;max-width:1000px;">
+      <h3 style="margin-bottom:14px;font-size:15px;">WhatsApp Message Templates</h3>
+      <p class="text-muted" style="margin-bottom:14px;">Variables: <code>{name}</code> <code>{car}</code> <code>{reg}</code> <code>{amount}</code></p>
+      <div id="wa-templates"></div>
+    </div>
+  </div>
+
+</div><!-- /dashboard -->
+
+<!-- ── New Subscription Modal ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="sub-modal">
+  <div class="modal">
+    <h3>Create / Renew Subscription</h3>
+    <div id="sub-modal-err" class="err"></div>
+    <div class="form-group">
+      <label>Customer Phone</label>
+      <input id="sub-phone" type="tel" placeholder="9876543210" oninput="subPhoneLookup()">
+    </div>
+    <div id="sub-customer-info" class="hidden text-muted text-sm" style="margin-bottom:10px;"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Car Type</label>
+        <select id="sub-car-type"></select>
+      </div>
+      <div class="form-group">
+        <label>Wash Type</label>
+        <select id="sub-wash-type">
+          <option value="normal">Normal Wash</option>
+          <option value="foam">Foam Wash</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Frequency</label>
+      <select id="sub-frequency">
+        <option value="1">1 Wash / Month</option>
+        <option value="2">2 Washes / Month</option>
+        <option value="4">4 Washes / Month</option>
+      </select>
+    </div>
+    <div id="sub-price-display" class="price-badge mt8" style="margin-bottom:16px;">₹—</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSubModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="createSubscription()">Create Subscription</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Job Detail Modal ───────────────────────────────────────────────── -->
+<div class="modal-overlay" id="job-modal">
+  <div class="modal" style="width:640px;">
+    <h3 id="job-modal-title">Job Detail</h3>
+    <div id="job-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeJobModal()">Close</button>
+      <button class="btn btn-red btn-sm" id="job-delete-btn">Delete Job</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/js/admin.js"></script>
+</body>
+</html>

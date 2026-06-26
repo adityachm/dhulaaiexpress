@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dhulaai Express — Worker Panel</title>
+  <link rel="stylesheet" href="/css/panel.css">
+</head>
+<body>
+
+<!-- ── Login ──────────────────────────────────────────────────────────── -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="logo">🚗 Dhulaai Express</div>
+    <div class="sub">Worker Panel — Enter your PIN</div>
+    <form id="login-form">
+      <div id="login-err" class="err"></div>
+      <input id="login-pin" type="number" placeholder="• • • • • •" autocomplete="off" maxlength="6">
+      <button type="submit" class="btn btn-gold btn-full">Enter</button>
+    </form>
+  </div>
+</div>
+
+<!-- ── Dashboard ──────────────────────────────────────────────────────── -->
+<div id="dashboard" class="hidden">
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="brand">Dhulaai Express</span>
+      <span class="role-badge">Worker</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="active" data-tab="board" onclick="switchTab('board',this)">Job Board</button>
+      <button data-tab="new-car" onclick="switchTab('new-car',this)">+ New Car</button>
+    </div>
+    <button class="logout" onclick="logout()">Logout</button>
+  </div>
+
+  <!-- ── Job Board ─────────────────────────────────────────────────── -->
+  <div id="tab-board" class="page active">
+    <div class="section-header">
+      <h2>Live Job Board</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadBoard()">↻ Refresh</button>
+    </div>
+    <div class="board" id="board">
+      <div>
+        <div class="column-title"><span class="dot dot-received"></span>Received</div>
+        <div id="col-received"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+      <div>
+        <div class="column-title"><span class="dot dot-in_progress"></span>In Progress</div>
+        <div id="col-in_progress"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+      <div>
+        <div class="column-title"><span class="dot dot-ready"></span>Ready</div>
+        <div id="col-ready"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+      <div>
+        <div class="column-title"><span class="dot dot-delivered"></span>Delivered Today</div>
+        <div id="col-delivered"><div class="empty-state text-sm">No cars</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── New Car Form ───────────────────────────────────────────────── -->
+  <div id="tab-new-car" class="page">
+    <div class="section-header">
+      <h2>New Car Entry</h2>
+    </div>
+
+    <div style="max-width:600px;">
+      <div id="sub-banner" class="hidden card mt8 mb8" style="border-color:var(--green);margin-bottom:14px;">
+        <span class="sub-active">✓ Active subscription: </span><span id="sub-info"></span>
+      </div>
+      <div id="form-err" class="err"></div>
+
+      <form id="car-form" autocomplete="off">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Customer Phone *</label>
+            <input id="f-phone" type="tel" placeholder="9876543210" required>
+          </div>
+          <div class="form-group">
+            <label>Owner Name *</label>
+            <input id="f-name" type="text" placeholder="Ramesh Kumar" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Reg Number *</label>
+            <input id="f-reg" type="text" placeholder="UK07 AB 1234" required style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>Make / Model</label>
+            <input id="f-model" type="text" placeholder="Swift, Creta, …">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Colour</label>
+            <input id="f-color" type="text" placeholder="White, Silver, …">
+          </div>
+          <div class="form-group">
+            <label>Car Type *</label>
+            <select id="f-car-type" required>
+              <option value="">— Select —</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Service selection -->
+        <div class="form-group">
+          <label>Service Type</label>
+          <div class="toggle-row">
+            <input type="radio" id="svc-onetime" name="svc-mode" value="onetime" checked onchange="onServiceModeChange()">
+            <label for="svc-onetime">One-time Wash</label>
+            <input type="radio" id="svc-monthly" name="svc-mode" value="monthly" onchange="onServiceModeChange()">
+            <label for="svc-monthly">Monthly Package</label>
+            <input type="radio" id="svc-sub" name="svc-mode" value="sub" onchange="onServiceModeChange()">
+            <label for="svc-sub">Use Subscription</label>
+          </div>
+        </div>
+
+        <!-- One-time wash -->
+        <div id="onetime-block">
+          <div class="form-group">
+            <label>Wash Type</label>
+            <select id="f-wash-type" onchange="updatePrice()">
+              <option value="top">Top Wash (Exterior)</option>
+              <option value="normal">Normal Wash (Exterior)</option>
+              <option value="foam">Foam Wash (Premium)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Monthly package -->
+        <div id="monthly-block" class="hidden">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Frequency</label>
+              <select id="f-frequency" onchange="updatePrice()">
+                <option value="1">1 Wash / Month</option>
+                <option value="2">2 Washes / Month</option>
+                <option value="4">4 Washes / Month</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Wash Type</label>
+              <select id="f-monthly-wash" onchange="updatePrice()">
+                <option value="normal">Normal Wash</option>
+                <option value="foam">Foam Wash</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add-ons -->
+        <div class="form-group">
+          <label>Add-on Services</label>
+          <div id="addons-list"></div>
+        </div>
+
+        <!-- Pickup & Drop -->
+        <div class="toggle-row">
+          <input type="checkbox" id="f-pickup" onchange="togglePickup()">
+          <label for="f-pickup">Pickup &amp; Drop Service</label>
+        </div>
+        <div id="pickup-block" class="form-group hidden">
+          <label>Pickup Address</label>
+          <textarea id="f-address" rows="2" placeholder="House/Flat no, area, landmark…"></textarea>
+        </div>
+
+        <!-- Payment mode -->
+        <div class="form-group">
+          <label>Payment Mode</label>
+          <select id="f-payment">
+            <option value="cash">Cash</option>
+            <option value="upi">UPI</option>
+          </select>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-group">
+          <label>Notes</label>
+          <input id="f-notes" type="text" placeholder="Any special instructions…">
+        </div>
+
+        <!-- Price display -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span class="text-muted">Estimated Total:</span>
+          <span id="price-display" class="price-badge">₹0</span>
+        </div>
+
+        <button type="submit" class="btn btn-gold btn-full">Create Job</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/js/worker.js"></script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+-- Migration 001: initial schema (same as schema.sql, kept for reference)
+-- Applied via: wrangler d1 execute dhulaai-db --file ./migrations/001_init.sql
