@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Track Your Car — Dhulaai Express</title>
+  <style>
+    :root {
+      --bg:     #0a0e1a;
+      --bg2:    #111827;
+      --bg3:    #1a2235;
+      --border: #1e2d45;
+      --gold:   #f5c842;
+      --blue:   #2563eb;
+      --green:  #22c55e;
+      --orange: #f97316;
+      --red:    #ef4444;
+      --text:   #e2e8f0;
+      --text2:  #94a3b8;
+      --text3:  #64748b;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      padding: 32px 20px 24px;
+      background: linear-gradient(180deg, #0d1829 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    header .brand { font-size: 22px; font-weight: 800; color: var(--gold); letter-spacing: .5px; }
+    header .tagline { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+    /* ── Search card ── */
+    .search-wrap {
+      max-width: 480px; margin: 32px auto; padding: 0 16px;
+    }
+    .search-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 28px 24px;
+    }
+    .search-card h2 { font-size: 17px; margin-bottom: 6px; }
+    .search-card p  { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+
+    .tabs { display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .tabs button {
+      flex: 1; background: none; border: none; color: var(--text2);
+      padding: 9px; font-size: 13px; cursor: pointer; transition: all .15s;
+    }
+    .tabs button.active { background: var(--bg3); color: var(--gold); font-weight: 600; }
+
+    input[type="text"], input[type="tel"] {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 12px 14px; font-size: 15px; outline: none;
+      margin-bottom: 12px; transition: border-color .15s;
+    }
+    input:focus { border-color: var(--gold); }
+    .btn-track {
+      width: 100%; background: var(--gold); color: #000; border: none;
+      border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: opacity .15s;
+    }
+    .btn-track:hover { opacity: .88; }
+    .btn-track:disabled { opacity: .5; cursor: not-allowed; }
+    .err { color: var(--red); font-size: 13px; margin-top: 10px; text-align: center; min-height: 18px; }
+
+    /* ── Result card ── */
+    .result-wrap {
+      max-width: 540px; margin: 0 auto 40px; padding: 0 16px;
+      display: none;
+    }
+
+    .vehicle-header {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .car-icon { font-size: 36px; }
+    .car-info .reg   { font-size: 20px; font-weight: 800; letter-spacing: 1px; }
+    .car-info .model { font-size: 13px; color: var(--text2); margin-top: 2px; }
+    .car-info .greeting { font-size: 13px; color: var(--gold); margin-top: 4px; font-weight: 600; }
+
+    /* ── Status timeline ── */
+    .status-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; margin-bottom: 14px;
+    }
+    .status-card h3 { font-size: 14px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px; }
+
+    .timeline { display: flex; justify-content: space-between; position: relative; margin-bottom: 8px; }
+    .timeline::before {
+      content: ''; position: absolute; top: 14px; left: 0; right: 0; height: 2px;
+      background: var(--border); z-index: 0;
+    }
+    .tl-step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; z-index: 1; }
+    .tl-dot {
+      width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border);
+      background: var(--bg3); display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; margin-bottom: 6px; transition: all .3s;
+    }
+    .tl-dot.done    { background: var(--green);  border-color: var(--green);  color: #fff; }
+    .tl-dot.active  { background: var(--gold);   border-color: var(--gold);   color: #000; box-shadow: 0 0 12px rgba(245,200,66,.4); }
+    .tl-label { font-size: 11px; color: var(--text2); text-align: center; line-height: 1.3; }
+    .tl-label.active { color: var(--gold); font-weight: 600; }
+    .tl-time { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+    /* ── Big status banner ── */
+    .status-banner {
+      text-align: center; padding: 18px; border-radius: 10px; margin-bottom: 16px;
+      border: 1px solid;
+    }
+    .status-banner .s-icon  { font-size: 32px; margin-bottom: 4px; }
+    .status-banner .s-label { font-size: 18px; font-weight: 700; }
+    .status-banner .s-desc  { font-size: 13px; margin-top: 4px; opacity: .8; }
+
+    .banner-received    { background: #0f1e33; border-color: var(--border); color: var(--text2); }
+    .banner-in_progress { background: #1c0f00; border-color: var(--orange); color: var(--orange); }
+    .banner-ready       { background: #052e16; border-color: var(--green);  color: var(--green); }
+    .banner-delivered   { background: #0f1e33; border-color: var(--blue);   color: #93c5fd; }
+
+    /* ── Overall progress bar ── */
+    .progress-wrap { margin-bottom: 16px; }
+    .progress-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+    .progress-track { height: 8px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+    .progress-fill  { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--blue), var(--gold)); transition: width .5s; }
+
+    /* ── Checklist ── */
+    .checklist-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; margin-bottom: 14px;
+    }
+    .checklist-card h3 { font-size: 14px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+    .svc-block { margin-bottom: 18px; }
+    .svc-block:last-child { margin-bottom: 0; }
+    .svc-name {
+      font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .svc-progress { font-size: 11px; color: var(--text3); }
+
+    .step-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 10px; border-radius: 8px; margin-bottom: 4px;
+      background: var(--bg3);
+      transition: all .2s;
+    }
+    .step-row.done  { background: #052e16; }
+    .step-row.active { background: #1c1500; border: 1px solid #5a4200; }
+
+    .step-icon { font-size: 16px; flex-shrink: 0; }
+    .step-label { font-size: 13px; flex: 1; }
+    .step-row.done .step-label { color: var(--text2); }
+    .step-row.active .step-label { color: var(--gold); font-weight: 600; }
+
+    /* ── Refresh ── */
+    .refresh-row {
+      text-align: center; margin-bottom: 20px;
+    }
+    .btn-refresh {
+      background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
+      border-radius: 8px; padding: 8px 20px; font-size: 13px; cursor: pointer;
+    }
+    .btn-refresh:hover { color: var(--text); border-color: var(--text2); }
+    .last-updated { font-size: 11px; color: var(--text3); margin-top: 6px; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; padding: 24px; font-size: 12px; color: var(--text3);
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--gold); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">🚗 Dhulaai Express</div>
+  <div class="tagline">Premium Car Care · Dehradun</div>
+</header>
+
+<!-- ── Search ── -->
+<div class="search-wrap" id="search-section">
+  <div class="search-card">
+    <h2>Track Your Vehicle</h2>
+    <p>Enter your mobile number or vehicle registration to see your car's live wash status.</p>
+
+    <div class="tabs">
+      <button class="active" id="tab-phone" onclick="switchLookup('phone')">📱 Mobile Number</button>
+      <button id="tab-reg" onclick="switchLookup('reg')">🚘 Reg Number</button>
+    </div>
+
+    <input type="tel"  id="input-phone" placeholder="e.g. 9876543210" maxlength="10">
+    <input type="text" id="input-reg"   placeholder="e.g. UK07 AB 1234" class="hidden" style="text-transform:uppercase;">
+
+    <button class="btn-track" id="track-btn" onclick="track()">Track My Car →</button>
+    <div class="err" id="search-err"></div>
+  </div>
+</div>
+
+<!-- ── Result ── -->
+<div class="result-wrap" id="result-section">
+
+  <!-- Vehicle header -->
+  <div class="vehicle-header">
+    <div class="car-icon">🚗</div>
+    <div class="car-info">
+      <div class="reg" id="r-reg"></div>
+      <div class="model" id="r-model"></div>
+      <div class="greeting" id="r-greeting"></div>
+    </div>
+  </div>
+
+  <!-- Status banner -->
+  <div class="status-banner" id="r-banner">
+    <div class="s-icon" id="r-icon"></div>
+    <div class="s-label" id="r-status-label"></div>
+    <div class="s-desc" id="r-status-desc"></div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="status-card">
+    <h3>Journey</h3>
+    <div class="timeline" id="r-timeline"></div>
+  </div>
+
+  <!-- Progress -->
+  <div class="status-card">
+    <h3>Overall Progress</h3>
+    <div class="progress-wrap">
+      <div class="progress-meta">
+        <span id="r-steps-done"></span>
+        <span id="r-steps-pct"></span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="r-progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checklist -->
+  <div class="checklist-card">
+    <h3>Detailed Checklist</h3>
+    <div id="r-checklist"></div>
+  </div>
+
+  <!-- Refresh -->
+  <div class="refresh-row">
+    <button class="btn-refresh" onclick="refresh()">↻ Refresh Status</button>
+    <div class="last-updated" id="r-last-updated"></div>
+  </div>
+
+  <div style="text-align:center;margin-bottom:16px;">
+    <button class="btn-refresh" onclick="reset()">← Track Another Vehicle</button>
+  </div>
+
+</div>
+
+<footer>
+  <div>📍 Kuwanwala, Opp. Windlass River Valley, Dehradun</div>
+  <div style="margin-top:6px;">
+    <a href="https://wa.me/919149292076">💬 WhatsApp Us</a> &nbsp;·&nbsp;
+    <a href="tel:9149292076">📞 9149292076</a>
+  </div>
+</footer>
+
+<script>
+  const STATUS_CONFIG = {
+    received:    { icon: '📋', label: 'Vehicle Received', desc: 'We have your car and will begin shortly.', cls: 'banner-received' },
+    in_progress: { icon: '🧽', label: 'Wash in Progress', desc: 'Your car is being taken care of right now!', cls: 'banner-in_progress' },
+    ready:       { icon: '✅', label: 'Ready for Pickup!', desc: 'Your car is clean and waiting for you.', cls: 'banner-ready' },
+    delivered:   { icon: '🎉', label: 'Delivered', desc: 'Your car has been delivered. Thank you!', cls: 'banner-delivered' },
+  };
+
+  const TL_STEPS = [
+    { key: 'received',    label: 'Received',    icon: '📋' },
+    { key: 'in_progress', label: 'In Progress', icon: '🧽' },
+    { key: 'ready',       label: 'Ready',       icon: '✅' },
+    { key: 'delivered',   label: 'Delivered',   icon: '🎉' },
+  ];
+
+  const STATUS_ORDER = ['received', 'in_progress', 'ready', 'delivered'];
+
+  let lookupMode = 'phone';
+  let lastQuery  = null;
+
+  function switchLookup(mode) {
+    lookupMode = mode;
+    document.getElementById('tab-phone').classList.toggle('active', mode === 'phone');
+    document.getElementById('tab-reg').classList.toggle('active', mode === 'reg');
+    document.getElementById('input-phone').classList.toggle('hidden', mode !== 'phone');
+    document.getElementById('input-reg').classList.toggle('hidden', mode !== 'reg');
+    document.getElementById('search-err').textContent = '';
+  }
+
+  async function track() {
+    const err = document.getElementById('search-err');
+    const btn = document.getElementById('track-btn');
+    err.textContent = '';
+
+    const val = lookupMode === 'phone'
+      ? document.getElementById('input-phone').value.trim()
+      : document.getElementById('input-reg').value.trim().toUpperCase();
+
+    if (!val) { err.textContent = 'Please enter your ' + (lookupMode === 'phone' ? 'mobile number' : 'registration number') + '.'; return; }
+
+    btn.disabled = true; btn.textContent = 'Searching…';
+
+    const param = lookupMode === 'phone' ? `phone=${encodeURIComponent(val)}` : `reg=${encodeURIComponent(val)}`;
+    const r = await fetch(`/api/status?${param}`);
+    const data = await r.json().catch(() => ({}));
+
+    btn.disabled = false; btn.textContent = 'Track My Car →';
+
+    if (!data.found) { err.textContent = 'No active job found. Please check the number or contact us.'; return; }
+
+    lastQuery = param;
+    renderResult(data.job);
+    document.getElementById('search-section').style.display = 'none';
+    document.getElementById('result-section').style.display = 'block';
+  }
+
+  function renderResult(job) {
+    const checkpoints = JSON.parse(job.checkpoints || '[]');
+    const totalSteps = checkpoints.reduce((s, c) => s + c.steps.length, 0);
+    const doneSteps  = checkpoints.reduce((s, c) => s + c.steps.filter(st => st.done).length, 0);
+    const pct = totalSteps ? Math.round(doneSteps / totalSteps * 100) : 0;
+
+    // Vehicle header
+    const carLabel = [job.make_model, job.color].filter(Boolean).join(' · ');
+    document.getElementById('r-reg').textContent = job.reg_number;
+    document.getElementById('r-model').textContent = carLabel || job.car_type;
+    document.getElementById('r-greeting').textContent = job.first_name ? `Hi ${job.first_name}! 👋` : '';
+
+    // Status banner
+    const cfg = STATUS_CONFIG[job.status] || STATUS_CONFIG.received;
+    const banner = document.getElementById('r-banner');
+    banner.className = `status-banner ${cfg.cls}`;
+    document.getElementById('r-icon').textContent = cfg.icon;
+    document.getElementById('r-status-label').textContent = cfg.label;
+    document.getElementById('r-status-desc').textContent = cfg.desc;
+
+    // Timeline
+    const curIdx = STATUS_ORDER.indexOf(job.status);
+    document.getElementById('r-timeline').innerHTML = TL_STEPS.map((s, i) => {
+      const isDone   = i < curIdx;
+      const isActive = i === curIdx;
+      const dotCls   = isDone ? 'done' : isActive ? 'active' : '';
+      const lblCls   = isActive ? 'active' : '';
+      const stamp    = i === 0 ? job.created_at : i === 1 ? job.started_at : i === 2 ? job.ready_at : job.delivered_at;
+      return `
+        <div class="tl-step">
+          <div class="tl-dot ${dotCls}">${isDone ? '✓' : isActive ? s.icon : i + 1}</div>
+          <div class="tl-label ${lblCls}">${s.label}</div>
+          <div class="tl-time">${stamp ? fmtTime(stamp) : ''}</div>
+        </div>`;
+    }).join('');
+
+    // Progress bar
+    document.getElementById('r-steps-done').textContent = `${doneSteps} of ${totalSteps} steps complete`;
+    document.getElementById('r-steps-pct').textContent = `${pct}%`;
+    document.getElementById('r-progress-fill').style.width = `${pct}%`;
+
+    // Checklist
+    const clEl = document.getElementById('r-checklist');
+    if (!checkpoints.length) { clEl.innerHTML = '<div style="color:var(--text3);font-size:13px;">Checklist will appear once the wash begins.</div>'; }
+    else {
+      clEl.innerHTML = checkpoints.map(cp => {
+        const cpDone = cp.steps.filter(s => s.done).length;
+        // Find first undone step index
+        const firstUndoneIdx = cp.steps.findIndex(s => !s.done);
+        return `
+          <div class="svc-block">
+            <div class="svc-name">
+              <span>${cp.label}</span>
+              <span class="svc-progress">${cpDone}/${cp.steps.length}</span>
+            </div>
+            ${cp.steps.map((step, si) => {
+              const isActive = !step.done && si === firstUndoneIdx && job.status === 'in_progress';
+              return `
+                <div class="step-row ${step.done ? 'done' : isActive ? 'active' : ''}">
+                  <span class="step-icon">${step.done ? '✅' : isActive ? '⚙️' : '○'}</span>
+                  <span class="step-label">${step.label}</span>
+                </div>`;
+            }).join('')}
+          </div>`;
+      }).join('');
+    }
+
+    // Last updated
+    document.getElementById('r-last-updated').textContent = 'Last updated: ' + new Date().toLocaleTimeString('en-IN');
+  }
+
+  async function refresh() {
+    if (!lastQuery) return;
+    const btn = document.querySelector('.btn-refresh');
+    btn.textContent = '↻ Refreshing…';
+    const r = await fetch(`/api/status?${lastQuery}`);
+    const data = await r.json().catch(() => ({}));
+    if (data.found) renderResult(data.job);
+    btn.textContent = '↻ Refresh Status';
+  }
+
+  function reset() {
+    document.getElementById('search-section').style.display = 'block';
+    document.getElementById('result-section').style.display = 'none';
+    document.getElementById('input-phone').value = '';
+    document.getElementById('input-reg').value = '';
+    document.getElementById('search-err').textContent = '';
+    lastQuery = null;
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Auto-refresh every 30 seconds when result is visible
+  setInterval(() => {
+    if (document.getElementById('result-section').style.display !== 'none' && lastQuery) refresh();
+  }, 30000);
+
+  // Allow input-reg to auto-uppercase while typing
+  document.getElementById('input-reg').addEventListener('input', function() {
+    const pos = this.selectionStart;
+    this.value = this.value.toUpperCase();
+    this.setSelectionRange(pos, pos);
+  });
+
+  // Enter key submits
+  ['input-phone','input-reg'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') track(); });
+  });
+
+  function hidden(el) { el.style.display = 'none'; }
+  HTMLElement.prototype.hidden = false;
+  // polyfill .hidden class toggle used above
+  document.querySelectorAll('.hidden').forEach(el => el.style.display = 'none');
+</script>
+</body>
+</html>
