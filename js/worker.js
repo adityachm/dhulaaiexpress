@@ -194,12 +194,12 @@ window.sendOTP = async function() {
   btn.disabled = false; btn.textContent = 'Resend OTP';
 
   if (data.waUrl) {
-    // Open WhatsApp with OTP pre-filled — worker taps Send on their phone
-    window.open(data.waUrl, '_blank');
+    // Set href on the link — worker taps it directly (window.open after await is blocked by browsers)
+    document.getElementById('otp-wa-link').href = data.waUrl;
     document.getElementById('otp-block').classList.remove('hidden');
-    document.getElementById('otp-status').textContent = '📱 WhatsApp opened. Send the message, then ask the customer to read back the code.';
-    document.getElementById('otp-status').style.color = 'var(--text2)';
+    document.getElementById('otp-status').textContent = '';
   } else {
+    document.getElementById('otp-block').classList.remove('hidden');
     document.getElementById('otp-status').textContent = 'Failed to generate OTP. Try again.';
     document.getElementById('otp-status').style.color = 'var(--red)';
   }
@@ -308,8 +308,18 @@ document.getElementById('car-form').addEventListener('submit', async e => {
   if (r.ok) {
     const job = await r.json();
 
-    // Open WhatsApp with the status tracking link pre-filled — worker taps Send
-    if (job.statusWaUrl) window.open(job.statusWaUrl, '_blank');
+    // Show a tap-to-send WhatsApp button (window.open after await is blocked by browsers)
+    if (job.statusWaUrl) {
+      const waBtn = document.createElement('a');
+      waBtn.href = job.statusWaUrl;
+      waBtn.target = '_blank';
+      waBtn.rel = 'noopener';
+      waBtn.className = 'btn btn-green btn-full';
+      waBtn.style.cssText = 'display:block;text-align:center;margin-bottom:12px;text-decoration:none;';
+      waBtn.textContent = '📱 Tap to Send Status Link to Customer';
+      err.parentNode.insertBefore(waBtn, err);
+      setTimeout(() => waBtn.remove(), 30000);
+    }
 
     e.target.reset();
     hideSub(); activeSub = null;

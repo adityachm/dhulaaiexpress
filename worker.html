@@ -87,14 +87,21 @@
 
         <!-- OTP input (shown after Send OTP is clicked) -->
         <div id="otp-block" class="hidden" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;">
-          <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">
-            📱 OTP sent to customer's WhatsApp. Ask them for the code.
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">
+            Step 1: Send the OTP to customer's WhatsApp, then ask them to read it back.
+          </div>
+          <!-- WhatsApp link shown here — user taps it directly (avoids popup blocker) -->
+          <a id="otp-wa-link" href="#" target="_blank" rel="noopener"
+            style="display:inline-flex;align-items:center;gap:8px;background:#075e54;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;margin-bottom:12px;">
+            📱 Open WhatsApp to Send OTP
+          </a>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">
+            Step 2: Once customer reads back the code, enter it below.
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <input id="f-otp" type="number" placeholder="6-digit OTP" maxlength="6"
               style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:16px;letter-spacing:4px;text-align:center;outline:none;">
             <button type="button" class="btn btn-green btn-sm" onclick="verifyOTP()">Verify</button>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="sendOTP()">Resend</button>
           </div>
           <div id="otp-status" style="font-size:13px;margin-top:8px;"></div>
         </div>
