@@ -502,11 +502,20 @@ function renderMonthlyPrices() {
 
 function renderAddonPrices() {
   if (!pricing) return;
+  const carTypes = pricing.car_types;
   const html = pricing.addons.map(a => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:14px;">
-      <span style="flex:1;">${a.name}</span>
-      ₹<input type="number" value="${a.base_price}" style="width:80px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;"
-        onchange="saveAddonPrice(this,${a.id})">
+    <div style="margin-bottom:20px;">
+      <div style="font-weight:600;font-size:14px;color:var(--gold);margin-bottom:8px;">${a.name}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">
+        ${carTypes.map(ct => {
+          const p = pricing.addon_pricing?.[a.id]?.[ct] ?? a.base_price;
+          return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">${ct}</div>
+            ₹<input type="number" value="${p}" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);padding:2px 4px;font-size:14px;"
+              onchange="saveAddonPriceCell(this,${a.id},'${ct}')">
+          </div>`;
+        }).join('')}
+      </div>
     </div>
   `).join('');
   document.getElementById('addon-price-table').innerHTML = html;
@@ -518,8 +527,9 @@ window.savePriceCell = async function(input, type, carType, washType, frequency)
   await api('/api/pricing', { method: 'PUT', body: JSON.stringify(body) });
 };
 
-window.saveAddonPrice = async function(input, addonId) {
-  await api('/api/pricing', { method: 'PUT', body: JSON.stringify({ type: 'addon', addon_id: addonId, base_price: Number(input.value) }) });
+window.saveAddonPriceCell = async function(input, addonId, carType) {
+  await api('/api/pricing', { method: 'PUT', body: JSON.stringify({ type: 'addon_pricing', addon_id: addonId, car_type: carType, price: Number(input.value) }) });
+  if (pricing.addon_pricing?.[addonId]) pricing.addon_pricing[addonId][carType] = Number(input.value);
 };
 
 function renderSettingsForm() {
@@ -539,7 +549,7 @@ window.saveSetting = async function(key, value) {
 };
 
 function renderCheckpointTemplates(templates) {
-  const serviceLabels = { top: 'Top Wash', normal: 'Normal Wash', foam: 'Foam Wash', interior: 'Interior Cleaning', rubbing: 'Full Rubbing', pickup_drop: 'Pickup & Drop' };
+  const serviceLabels = { top: 'Top Wash', normal: 'Normal Wash', foam: 'Foam Wash', interior: 'Dry Cleaning', rubbing: 'Full Rubbing', pickup_drop: 'Pickup & Drop' };
   const container = document.getElementById('checkpoint-templates');
   container.innerHTML = '';
 

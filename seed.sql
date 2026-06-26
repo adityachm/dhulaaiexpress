@@ -45,8 +45,22 @@ INSERT OR IGNORE INTO monthly_pricing (car_type, frequency, wash_type, price) VA
 
 -- ── Add-on services ───────────────────────────────────────────────────────
 INSERT OR IGNORE INTO addon_services (id, name, base_price) VALUES
-  (1, 'Interior Cleaning', 999),
-  (2, 'Full Rubbing',      1499);
+  (1, 'Dry Cleaning', 999),
+  (2, 'Full Rubbing', 1499);
+
+INSERT OR IGNORE INTO addon_pricing (addon_id, car_type, price) VALUES
+  (1, 'Hatchback',    999),
+  (1, 'Sedan',        1299),
+  (1, 'Compact SUV',  1499),
+  (1, 'Mid SUV',      1799),
+  (1, 'Large SUV',    1999),
+  (1, 'Luxury Car',   2499),
+  (2, 'Hatchback',    1499),
+  (2, 'Sedan',        1999),
+  (2, 'Compact SUV',  2499),
+  (2, 'Mid SUV',      2999),
+  (2, 'Large SUV',    3499),
+  (2, 'Luxury Car',   4999);
 
 -- ── Checkpoint templates ──────────────────────────────────────────────────
 INSERT OR IGNORE INTO checkpoint_templates (service_key, steps) VALUES

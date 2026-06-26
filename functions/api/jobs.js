@@ -28,7 +28,8 @@ function buildCheckpoints(templates, washType, addons, pickupDrop) {
     });
   }
   for (const addon of addons) {
-    const key = addon.name.toLowerCase().includes('interior') ? 'interior' : 'rubbing';
+    // addon id 1 = Dry Cleaning (uses interior checklist), id 2 = Full Rubbing
+    const key = addon.id === 1 ? 'interior' : 'rubbing';
     const tpl = templates.find(t => t.service_key === key);
     if (tpl) {
       checkpoints.push({

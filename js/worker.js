@@ -71,7 +71,7 @@ async function loadPricing() {
   });
   sel.addEventListener('change', updatePrice);
 
-  // Populate add-ons
+  // Populate add-ons (price auto-fills from car type selection)
   const list = document.getElementById('addons-list');
   list.innerHTML = '';
   pricing.addons.forEach(addon => {
@@ -80,9 +80,7 @@ async function loadPricing() {
     row.innerHTML = `
       <input type="checkbox" id="addon-${addon.id}" value="${addon.id}" onchange="updatePrice()">
       <label class="addon-name" for="addon-${addon.id}">${addon.name}</label>
-      <span style="color:var(--text2);font-size:12px;">from ₹${addon.base_price.toLocaleString('en-IN')}</span>
-      <input type="number" class="addon-price-input form-group input" id="addon-price-${addon.id}"
-        value="${addon.base_price}" min="0" onchange="updatePrice()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;">
+      <span id="addon-price-label-${addon.id}" style="color:var(--gold);font-size:13px;font-weight:600;margin-left:auto;">—</span>
     `;
     list.appendChild(row);
   });
@@ -108,13 +106,13 @@ window.updatePrice = function() {
     total = 0; // covered by subscription
   }
 
-  // Add-ons
+  // Add-ons — price from car-type matrix
   pricing.addons.forEach(addon => {
+    const addonPrice = (pricing.addon_pricing?.[addon.id]?.[carType]) ?? addon.base_price;
+    const label = document.getElementById(`addon-price-label-${addon.id}`);
+    if (label) label.textContent = carType ? `₹${addonPrice.toLocaleString('en-IN')}` : '—';
     const cb = document.getElementById(`addon-${addon.id}`);
-    if (cb && cb.checked) {
-      const priceInput = document.getElementById(`addon-price-${addon.id}`);
-      total += Number(priceInput?.value || addon.base_price);
-    }
+    if (cb && cb.checked) total += addonPrice;
   });
 
   document.getElementById('price-display').textContent = `₹${total.toLocaleString('en-IN')}`;
@@ -269,7 +267,7 @@ document.getElementById('car-form').addEventListener('submit', async e => {
     pricing.addons.forEach(addon => {
       const cb = document.getElementById(`addon-${addon.id}`);
       if (cb && cb.checked) {
-        const p = Number(document.getElementById(`addon-price-${addon.id}`)?.value || addon.base_price);
+        const p = (pricing.addon_pricing?.[addon.id]?.[carType]) ?? addon.base_price;
         addons.push({ id: addon.id, name: addon.name, base_price: p });
         addon_prices[addon.id] = p;
       }

@@ -21,10 +21,11 @@ export async function onRequest(context) {
   if (request.method === 'GET') {
     if (!role(request, env)) return new Response('Unauthorized', { status: 401, headers: CORS });
 
-    const [washRows, monthlyRows, addonRows] = await Promise.all([
+    const [washRows, monthlyRows, addonRows, addonPricingRows] = await Promise.all([
       env.DB.prepare('SELECT car_type, wash_type, price FROM wash_pricing').all(),
       env.DB.prepare('SELECT car_type, frequency, wash_type, price FROM monthly_pricing').all(),
       env.DB.prepare('SELECT id, name, base_price FROM addon_services WHERE is_active = 1').all(),
+      env.DB.prepare('SELECT addon_id, car_type, price FROM addon_pricing').all(),
     ]);
 
     // Build nested lookup objects for easy frontend use
@@ -39,6 +40,11 @@ export async function onRequest(context) {
       if (!monthly[r.car_type][r.frequency]) monthly[r.car_type][r.frequency] = {};
       monthly[r.car_type][r.frequency][r.wash_type] = r.price;
     }
+    const addonPricing = {};
+    for (const r of addonPricingRows.results) {
+      if (!addonPricing[r.addon_id]) addonPricing[r.addon_id] = {};
+      addonPricing[r.addon_id][r.car_type] = r.price;
+    }
 
     return new Response(JSON.stringify({
       car_types: CAR_TYPES,
@@ -47,6 +53,7 @@ export async function onRequest(context) {
       wash,
       monthly,
       addons: addonRows.results,
+      addon_pricing: addonPricing,
     }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
   }
 
@@ -62,9 +69,10 @@ export async function onRequest(context) {
     } else if (type === 'monthly') {
       await env.DB.prepare('INSERT OR REPLACE INTO monthly_pricing (car_type, frequency, wash_type, price) VALUES (?, ?, ?, ?)')
         .bind(car_type, Number(frequency), wash_type, Number(price)).run();
-    } else if (type === 'addon') {
-      await env.DB.prepare('UPDATE addon_services SET base_price = ? WHERE id = ?')
-        .bind(Number(base_price), Number(addon_id)).run();
+    } else if (type === 'addon_pricing') {
+      const { addon_id: aid, car_type: ct, price: p } = body;
+      await env.DB.prepare('INSERT OR REPLACE INTO addon_pricing (addon_id, car_type, price) VALUES (?, ?, ?)')
+        .bind(Number(aid), ct, Number(p)).run();
     } else {
       return new Response('Unknown type', { status: 400, headers: CORS });
     }
