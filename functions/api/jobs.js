@@ -1,5 +1,3 @@
-import { sendStatusLink } from '../_lib/wa.js';
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -175,18 +173,16 @@ export async function onRequest(context) {
       JSON.stringify(checkpoints),
     ).run();
 
-    // Auto-send WhatsApp status link (non-blocking — don't fail job creation if WA fails)
-    try {
-      const shopUrl = env.SHOP_URL || 'https://dhulaaiexpress.com';
-      const statusUrl = `${shopUrl}/status?phone=${encodeURIComponent(phone.trim())}`;
-      const firstName = name.trim().split(' ')[0];
-      const vehicleDesc = [make_model, color].filter(Boolean).join(' ') || car_type;
-      await sendStatusLink(env, phone.trim(), firstName, vehicleDesc, reg_number.trim().toUpperCase(), statusUrl);
-    } catch (e) {
-      console.error('Auto WA status link failed:', e.message);
-    }
+    // Build wa.me status link for the worker to send manually after job creation
+    const statusUrl = `https://dhulaaiexpress.com/status?phone=${encodeURIComponent(phone.trim())}`;
+    const firstName = name.trim().split(' ')[0];
+    const vehicleDesc = [make_model, color].filter(Boolean).join(' ') || car_type;
+    const statusMsg = `Hi ${firstName}! Your ${vehicleDesc} (${reg_number.trim().toUpperCase()}) has been checked in at Dhulaai Express 🚗\n\nTrack your car's wash status live here:\n${statusUrl}\n\nThank you for choosing us! 😊`;
+    const digits = phone.replace(/\D/g, '');
+    const e164 = digits.startsWith('91') ? digits : `91${digits}`;
+    const statusWaUrl = `https://wa.me/${e164}?text=${encodeURIComponent(statusMsg)}`;
 
-    return new Response(JSON.stringify({ id: meta.last_row_id, customer_id: customer.id }), {
+    return new Response(JSON.stringify({ id: meta.last_row_id, customer_id: customer.id, statusWaUrl }), {
       status: 201,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });

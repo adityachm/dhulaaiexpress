@@ -1,5 +1,3 @@
-import { sendOTP } from '../_lib/wa.js';
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -28,7 +26,7 @@ export async function onRequest(context) {
   const action = url.searchParams.get('action');
   const body = await request.json().catch(() => ({}));
 
-  // ── Send OTP ─────────────────────────────────────────────────────────
+  // ── Send OTP — generate code, return wa.me link for manual send ───────
   if (action === 'send') {
     const { phone } = body;
     if (!phone) return json({ error: 'Phone required' }, 400);
@@ -40,8 +38,12 @@ export async function onRequest(context) {
       'INSERT OR REPLACE INTO otps (phone, code, expires_at, verified) VALUES (?, ?, ?, 0)'
     ).bind(phone.trim(), code, expiresAt).run();
 
-    const sent = await sendOTP(env, phone, code);
-    return json({ sent, message: sent ? 'OTP sent via WhatsApp' : 'WhatsApp unavailable — check credentials' });
+    const digits = phone.replace(/\D/g, '');
+    const e164 = digits.startsWith('91') ? digits : `91${digits}`;
+    const message = `${code} is your OTP for Dhulaai Express vehicle check-in. Please share this code with our staff. Valid for 5 minutes.`;
+    const waUrl = `https://wa.me/${e164}?text=${encodeURIComponent(message)}`;
+
+    return json({ code, waUrl });
   }
 
   // ── Verify OTP ────────────────────────────────────────────────────────

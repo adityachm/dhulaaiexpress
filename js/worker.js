@@ -182,7 +182,7 @@ window.sendOTP = async function() {
   if (phone.length < 10) { alert('Enter a valid 10-digit phone number first.'); return; }
 
   const btn = document.getElementById('otp-send-btn');
-  btn.disabled = true; btn.textContent = 'Sending…';
+  btn.disabled = true; btn.textContent = 'Generating…';
 
   const r = await api('/api/otp?action=send', {
     method: 'POST',
@@ -192,9 +192,18 @@ window.sendOTP = async function() {
   const data = await r.json().catch(() => ({}));
 
   btn.disabled = false; btn.textContent = 'Resend OTP';
-  document.getElementById('otp-block').classList.remove('hidden');
-  document.getElementById('otp-status').textContent = data.message || (data.sent ? 'OTP sent!' : 'Failed to send OTP.');
-  document.getElementById('otp-status').style.color = data.sent ? 'var(--green)' : 'var(--orange)';
+
+  if (data.waUrl) {
+    // Open WhatsApp with OTP pre-filled — worker taps Send on their phone
+    window.open(data.waUrl, '_blank');
+    document.getElementById('otp-block').classList.remove('hidden');
+    document.getElementById('otp-status').textContent = '📱 WhatsApp opened. Send the message, then ask the customer to read back the code.';
+    document.getElementById('otp-status').style.color = 'var(--text2)';
+  } else {
+    document.getElementById('otp-status').textContent = 'Failed to generate OTP. Try again.';
+    document.getElementById('otp-status').style.color = 'var(--red)';
+  }
+
   phoneVerified = false;
   document.getElementById('phone-verified-badge').classList.add('hidden');
 };
@@ -297,7 +306,11 @@ document.getElementById('car-form').addEventListener('submit', async e => {
   });
 
   if (r.ok) {
-    // Status link auto-sent via server. Reset form.
+    const job = await r.json();
+
+    // Open WhatsApp with the status tracking link pre-filled — worker taps Send
+    if (job.statusWaUrl) window.open(job.statusWaUrl, '_blank');
+
     e.target.reset();
     hideSub(); activeSub = null;
     phoneVerified = false;
@@ -305,7 +318,6 @@ document.getElementById('car-form').addEventListener('submit', async e => {
     document.getElementById('phone-verified-badge').classList.add('hidden');
     document.getElementById('otp-block').classList.add('hidden');
     document.getElementById('otp-send-btn').textContent = 'Send OTP';
-    alert('✅ Job created! Status link sent to customer\'s WhatsApp automatically.');
     switchTab('board', document.querySelector('[data-tab="board"]'));
   } else {
     const msg = await r.text();
