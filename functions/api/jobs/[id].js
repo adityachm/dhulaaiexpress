@@ -91,11 +91,12 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
-    // Payment update (admin only)
-    if (body.amount_paid !== undefined || body.payment_mode) {
+    // Price / payment update (admin only)
+    if (body.price !== undefined || body.amount_paid !== undefined || body.payment_mode) {
       if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
       const sets = [];
       const vals = [];
+      if (body.price !== undefined) { sets.push('price = ?'); vals.push(Number(body.price)); }
       if (body.amount_paid !== undefined) { sets.push('amount_paid = ?'); vals.push(Number(body.amount_paid)); }
       if (body.payment_mode) { sets.push('payment_mode = ?'); vals.push(body.payment_mode); }
       vals.push(id);

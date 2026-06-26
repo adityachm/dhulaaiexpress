@@ -97,7 +97,14 @@ function renderAdminCard(job) {
       <div class="jc-reg">${job.reg_number} <span class="badge badge-${job.status}">${job.status.replace('_',' ')}</span></div>
       <div class="jc-owner">${job.customer_name} · ${job.customer_phone}</div>
       <div class="jc-svc">${job.services_summary}</div>
-      <div class="jc-time">₹${(job.price||0).toLocaleString('en-IN')} · Steps ${done}/${total}</div>
+      <div class="jc-time" style="display:flex;align-items:center;gap:8px;">
+        <span style="color:var(--text2);font-size:12px;">Steps ${done}/${total}</span>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:4px;">
+          ₹<input type="number" value="${job.price||0}"
+            style="width:72px;background:var(--bg3);border:1px solid var(--border);color:var(--gold);border-radius:6px;padding:3px 6px;font-size:13px;font-weight:600;"
+            onchange="quickEditPrice(${job.id},this.value)" onclick="event.stopPropagation()">
+        </span>
+      </div>
       <div class="jc-actions">
         <button class="btn btn-ghost btn-sm" onclick="openJobModal(${job.id})">Detail</button>
         <button class="btn btn-wa btn-sm" onclick="adminSendWA(${job.id},'${job.status}')">📱 WA</button>
@@ -110,6 +117,15 @@ window.adminSendWA = async function(jobId, status) {
   const job = allJobs.find(j => j.id === jobId);
   const statusKey = status === 'in_progress' ? 'inprogress' : status;
   if (job) await sendStatus(job, statusKey);
+};
+
+window.quickEditPrice = async function(jobId, newPrice) {
+  await api(`/api/jobs/${jobId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ price: Number(newPrice) }),
+  });
+  const job = allJobs.find(j => j.id === jobId);
+  if (job) job.price = Number(newPrice);
 };
 
 // ── Summary ────────────────────────────────────────────────────────────
@@ -259,8 +275,6 @@ window.openJobModal = async function(jobId) {
       <div><span class="text-muted">Car: </span>${job.make_model} ${job.color} (${job.car_type})</div>
       <div><span class="text-muted">Service: </span>${job.services_summary}</div>
       <div><span class="text-muted">Status: </span><span class="badge badge-${job.status}">${job.status.replace('_',' ')}</span></div>
-      <div><span class="text-muted">Price: </span><b class="text-gold">₹${(job.price||0).toLocaleString('en-IN')}</b></div>
-      <div><span class="text-muted">Paid: </span>₹${(job.amount_paid||0).toLocaleString('en-IN')} (${job.payment_mode})</div>
       <div><span class="text-muted">Created: </span>${job.created_at?.split('T')[0]||''}</div>
       <div><span class="text-muted">Notes: </span>${job.notes||'—'}</div>
     </div>
@@ -268,15 +282,28 @@ window.openJobModal = async function(jobId) {
     <h4 style="font-size:13px;margin-bottom:10px;color:var(--text2);">Checkpoints</h4>
     ${cpHtml}
     <div class="divider"></div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <label style="font-size:13px;color:var(--text2);">Mark payment:</label>
-      <input type="number" id="pay-amount" value="${job.amount_paid||0}" style="width:90px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;">
-      <select id="pay-mode" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;">
-        <option value="cash" ${job.payment_mode==='cash'?'selected':''}>Cash</option>
-        <option value="upi" ${job.payment_mode==='upi'?'selected':''}>UPI</option>
-        <option value="sub" ${job.payment_mode==='sub'?'selected':''}>Sub</option>
-      </select>
-      <button class="btn btn-ghost btn-sm" onclick="savePayment(${job.id})">Save</button>
+    <!-- Price edit + payment -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px;font-weight:600;">Billing</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+        <label style="font-size:13px;color:var(--text2);min-width:80px;">Job Price:</label>
+        <span style="font-size:12px;color:var(--text2);">Auto: ₹${(job.price||0).toLocaleString('en-IN')}</span>
+        <span style="color:var(--text2);">→</span>
+        ₹<input type="number" id="edit-price" value="${job.price||0}"
+          style="width:90px;background:var(--bg);border:1px solid var(--gold);color:var(--gold);border-radius:6px;padding:4px 8px;font-weight:600;"
+          oninput="updateDiscountLabel(${job.price||0})">
+        <span id="discount-label" style="font-size:12px;color:var(--green);"></span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <label style="font-size:13px;color:var(--text2);min-width:80px;">Amount Paid:</label>
+        <input type="number" id="pay-amount" value="${job.amount_paid||0}" style="width:90px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;">
+        <select id="pay-mode" style="background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;">
+          <option value="cash" ${job.payment_mode==='cash'?'selected':''}>Cash</option>
+          <option value="upi" ${job.payment_mode==='upi'?'selected':''}>UPI</option>
+          <option value="sub" ${job.payment_mode==='sub'?'selected':''}>Sub</option>
+        </select>
+        <button class="btn btn-gold btn-sm" onclick="savePayment(${job.id})">Save</button>
+      </div>
     </div>
   `;
 
@@ -286,12 +313,30 @@ window.openJobModal = async function(jobId) {
 
 window.closeJobModal = function() { document.getElementById('job-modal').classList.remove('open'); };
 
+window.updateDiscountLabel = function(originalPrice) {
+  const edited = Number(document.getElementById('edit-price').value);
+  const el = document.getElementById('discount-label');
+  if (!el) return;
+  if (edited < originalPrice) {
+    const disc = originalPrice - edited;
+    el.textContent = `− ₹${disc.toLocaleString('en-IN')} discount`;
+    el.style.color = 'var(--green)';
+  } else if (edited > originalPrice) {
+    const extra = edited - originalPrice;
+    el.textContent = `+ ₹${extra.toLocaleString('en-IN')} added`;
+    el.style.color = 'var(--orange)';
+  } else {
+    el.textContent = '';
+  }
+};
+
 window.savePayment = async function(jobId) {
+  const price  = Number(document.getElementById('edit-price').value);
   const amount = Number(document.getElementById('pay-amount').value);
-  const mode = document.getElementById('pay-mode').value;
+  const mode   = document.getElementById('pay-mode').value;
   await api(`/api/jobs/${jobId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ amount_paid: amount, payment_mode: mode }),
+    body: JSON.stringify({ price, amount_paid: amount, payment_mode: mode }),
   });
   closeJobModal();
   loadCars();
