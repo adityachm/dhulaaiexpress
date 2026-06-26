@@ -16,6 +16,24 @@ function apiRaw(path, opts = {}) {
   return fetch(path, { ...opts, headers: { 'X-Admin-Secret': SECRET, ...(opts.headers || {}) } });
 }
 
+// ── Session helpers ────────────────────────────────────────────────────
+const SESSION_KEY = 'dhulaai_admin_session';
+const SESSION_TTL = 12 * 60 * 60 * 1000; // 12 hours
+
+function saveSession(secret) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ secret, expiresAt: Date.now() + SESSION_TTL }));
+}
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+function restoreSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (s && s.secret && s.expiresAt > Date.now()) return s.secret;
+  } catch {}
+  return null;
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────
 document.getElementById('login-form').addEventListener('submit', async e => {
   e.preventDefault();
@@ -31,21 +49,35 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const { role } = await r.json().catch(() => ({}));
   if (role === 'admin') {
     SECRET = pw;
-    setAuthHeaders({ 'X-Admin-Secret': SECRET });
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('dashboard').classList.remove('hidden');
-    await init();
+    saveSession(pw);
+    enterDashboard();
   } else {
     err.textContent = 'Wrong password.';
     btn.disabled = false; btn.textContent = 'Login';
   }
 });
 
+async function enterDashboard() {
+  setAuthHeaders({ 'X-Admin-Secret': SECRET });
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  await init();
+}
+
 async function init() {
   await Promise.all([loadDash(), loadPricing()]);
 }
 
-window.logout = function() { SECRET = ''; location.reload(); };
+window.logout = function() { clearSession(); SECRET = ''; location.reload(); };
+
+// Auto-restore session on load
+(async () => {
+  const saved = restoreSession();
+  if (saved) {
+    SECRET = saved;
+    await enterDashboard();
+  }
+})();
 
 // ── Tab switching ──────────────────────────────────────────────────────
 window.switchTab = function(tab, btn) {

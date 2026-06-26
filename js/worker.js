@@ -12,6 +12,24 @@ function api(path, opts = {}) {
   return fetch(path, { ...opts, headers: { 'X-Worker-Pin': PIN, ...(opts.headers || {}) } });
 }
 
+// ── Session helpers ────────────────────────────────────────────────────
+const SESSION_KEY = 'dhulaai_worker_session';
+const SESSION_TTL = 12 * 60 * 60 * 1000; // 12 hours
+
+function saveSession(pin) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ pin, expiresAt: Date.now() + SESSION_TTL }));
+}
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+function restoreSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (s && s.pin && s.expiresAt > Date.now()) return s.pin;
+  } catch {}
+  return null;
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────
 document.getElementById('login-form').addEventListener('submit', async e => {
   e.preventDefault();
@@ -29,23 +47,39 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const { role } = await r.json().catch(() => ({}));
   if (role === 'worker' || role === 'admin') {
     PIN = pin;
-    setAuthHeaders({ 'X-Worker-Pin': PIN });
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('dashboard').classList.remove('hidden');
-    await init();
+    saveSession(pin);
+    enterDashboard();
   } else {
     err.textContent = 'Wrong PIN. Try again.';
     btn.disabled = false; btn.textContent = 'Enter';
   }
 });
 
+async function enterDashboard() {
+  setAuthHeaders({ 'X-Worker-Pin': PIN });
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  await init();
+}
+
 async function init() {
   await Promise.all([loadPricing(), loadBoard(), loadSettings()]);
 }
 
 function logout() {
-  PIN = ''; location.reload();
+  clearSession();
+  PIN = '';
+  location.reload();
 }
+
+// Auto-restore session on load
+(async () => {
+  const saved = restoreSession();
+  if (saved) {
+    PIN = saved;
+    await enterDashboard();
+  }
+})();
 
 // ── Tab switching ──────────────────────────────────────────────────────
 window.switchTab = function(tab, btn) {
