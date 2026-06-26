@@ -354,8 +354,18 @@ function renderBoard() {
     const col = document.getElementById(`col-${status}`);
     if (!col) return;
     if (!jobs.length) { col.innerHTML = '<div class="empty-state text-sm">No cars</div>'; return; }
-    col.innerHTML = jobs.map(j => renderJobCard(j)).join('');
+    col.innerHTML = jobs.map(j => status === 'delivered' ? renderDeliveredCard(j) : renderJobCard(j)).join('');
   });
+}
+
+function renderDeliveredCard(job) {
+  return `
+    <div class="job-card status-delivered" id="job-${job.id}" style="padding:12px 14px;">
+      <div class="jc-reg" style="font-size:15px;">${job.reg_number}</div>
+      <div class="jc-owner" style="font-size:12px;">${job.customer_name} · ${job.customer_phone}</div>
+      <div class="jc-svc" style="font-size:12px;color:var(--text2);">${job.services_summary}</div>
+    </div>
+  `;
 }
 
 function renderJobCard(job) {

@@ -61,7 +61,7 @@ INSERT OR IGNORE INTO checkpoint_templates (service_key, steps) VALUES
 INSERT OR IGNORE INTO settings (key, value) VALUES
   ('shop_phone',      '919149292076'),
   ('shop_name',       'Dhulaai Express'),
-  ('tpl_received',    'Hi {name}! 🚗 We have received your {car} ({reg}) at Dhulaai Express. We will get started shortly. Thank you!'),
+  ('tpl_received',    'Hi {name}! 🚗 Your {car} ({reg}) has been received at Dhulaai Express. Track your wash status live here: {status_url} — Thank you!'),
   ('tpl_inprogress',  'Hi {name}! Your {car} ({reg}) is now being washed at Dhulaai Express. We will notify you when it''s ready! ✨'),
   ('tpl_ready',       'Hi {name}! ✅ Your {car} ({reg}) is ready for pickup at Dhulaai Express. Amount: ₹{amount}. Thank you for choosing us!'),
   ('tpl_delivered',   'Hi {name}! 🎉 Your {car} ({reg}) has been delivered. Thank you for visiting Dhulaai Express, Dehradun. See you next time!');

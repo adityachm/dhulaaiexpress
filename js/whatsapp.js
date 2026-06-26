@@ -32,16 +32,23 @@ export async function sendStatus(job, statusKey) {
   if (!tpl) { alert('No WhatsApp template set for this status.'); return; }
 
   const carLabel = [job.make_model, job.color].filter(Boolean).join(' ') || job.car_type;
+  const phone = (job.customer_phone || '').replace(/\D/g, '');
+  const countryPhone = phone.startsWith('91') ? phone : `91${phone}`;
+  const statusUrl = `${location.origin}/status?phone=${encodeURIComponent(job.customer_phone || '')}`;
+
   const vars = {
     name: job.customer_name || '',
     car: carLabel,
     reg: job.reg_number || '',
     amount: job.price ? `₹${job.price.toLocaleString('en-IN')}` : '',
+    status_url: statusUrl,
   };
 
   const message = fillTemplate(tpl, vars);
-  const phone = (job.customer_phone || '').replace(/\D/g, '');
-  const countryPhone = phone.startsWith('91') ? phone : `91${phone}`;
   const url = `https://wa.me/${countryPhone}?text=${encodeURIComponent(message)}`;
-  window.open(url, '_blank');
+
+  // Open as a proper anchor click to avoid popup blockers
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
 }
