@@ -440,6 +440,22 @@
   HTMLElement.prototype.hidden = false;
   // polyfill .hidden class toggle used above
   document.querySelectorAll('.hidden').forEach(el => el.style.display = 'none');
+
+  // Auto-load if phone or reg is in the URL (e.g. /status?phone=9876543210)
+  (function autoLoad() {
+    const params = new URLSearchParams(location.search);
+    const phone  = params.get('phone');
+    const reg    = params.get('reg');
+    if (phone) {
+      document.getElementById('input-phone').value = phone;
+      switchLookup('phone');
+      track();
+    } else if (reg) {
+      document.getElementById('input-reg').value = reg.toUpperCase();
+      switchLookup('reg');
+      track();
+    }
+  })();
 </script>
 </body>
 </html>
