@@ -261,6 +261,52 @@ tr:hover td { background: var(--bg3); }
 .bar-track { flex: 1; height: 8px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
 .bar-fill  { height: 100%; border-radius: 4px; background: var(--gold); }
 
+/* ── Manage grid ─────────────────────────────────────────────────────── */
+.manage-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1000px;
+}
+
+/* ── Mobile responsive ───────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Topbar: brand + logout on top row, scrollable tabs below */
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 10px 14px 0;
+    gap: 0;
+  }
+  .topbar .nav-tabs {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    padding: 8px 0 10px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0;
+  }
+  .topbar .nav-tabs::-webkit-scrollbar { display: none; }
+  .topbar .nav-tabs button {
+    white-space: nowrap;
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+
+  /* Forms collapse to single column */
+  .form-row, .form-row-3 { grid-template-columns: 1fr; }
+
+  /* Page padding */
+  .page { padding: 14px; }
+
+  /* Manage grid single column */
+  .manage-grid { grid-template-columns: 1fr; }
+
+  /* Modal full width */
+  .modal { padding: 20px 16px; }
+
+  /* Search bar stack */
+  .search-bar { flex-wrap: wrap; }
+}
+
 /* ── Utilities ───────────────────────────────────────────────────────── */
 .hidden  { display: none !important; }
 .mt8  { margin-top: 8px; }
