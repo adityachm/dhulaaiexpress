@@ -335,19 +335,6 @@ document.getElementById('car-form').addEventListener('submit', async e => {
   if (r.ok) {
     const job = await r.json();
 
-    // Show a tap-to-send WhatsApp button (window.open after await is blocked by browsers)
-    if (job.statusWaUrl) {
-      const waBtn = document.createElement('a');
-      waBtn.href = job.statusWaUrl;
-      waBtn.target = '_blank';
-      waBtn.rel = 'noopener';
-      waBtn.className = 'btn btn-green btn-full';
-      waBtn.style.cssText = 'display:block;text-align:center;margin-bottom:12px;text-decoration:none;';
-      waBtn.textContent = '📱 Tap to Send Status Link to Customer';
-      err.parentNode.insertBefore(waBtn, err);
-      setTimeout(() => waBtn.remove(), 30000);
-    }
-
     e.target.reset();
     hideSub(); activeSub = null;
     document.getElementById('price-display').textContent = '₹0';
@@ -415,27 +402,18 @@ function renderJobCard(job) {
   const canMarkReady = primaryCp ? primaryCp.steps.every(s => s.done) : true;
   const timeAgo = formatTime(job.created_at);
 
-  const waButtons = {
-    received:    `<button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'received')">📱 Received</button>`,
-    in_progress: `<button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'inprogress')">📱 In Progress</button>`,
-    ready:       `<button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'ready')">📱 Ready</button>`,
-    delivered:   `<button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'delivered')">📱 Delivered</button>`,
-  };
-
   const actionsByStatus = {
     received: `
       <button class="btn btn-primary btn-sm" onclick="changeStatus(${job.id},'in_progress')">▶ Start</button>
-      ${waButtons.received}
     `,
     in_progress: `
       <button class="btn btn-gold btn-sm ${canMarkReady ? '' : 'disabled'}" onclick="changeStatus(${job.id},'ready')" ${canMarkReady ? '' : 'disabled title="Complete checklist first"'}>✓ Mark Ready</button>
-      ${waButtons.in_progress}
     `,
     ready: `
       <button class="btn btn-green btn-sm" onclick="changeStatus(${job.id},'delivered')">🏁 Delivered</button>
-      ${waButtons.ready}
+      <button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'ready')">📱 Ready</button>
     `,
-    delivered: `${waButtons.delivered}`,
+    delivered: `<button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'delivered')">📱 Delivered</button>`,
   };
 
   return `
