@@ -326,6 +326,16 @@ document.getElementById('car-form').addEventListener('submit', async e => {
     btn.disabled = false; btn.textContent = 'Create Job'; return;
   }
 
+  // Build WhatsApp status link BEFORE the fetch so it opens in the same user gesture
+  // (window.open after await is blocked by browsers)
+  const digits = body.phone.replace(/\D/g, '');
+  const e164 = digits.startsWith('91') ? digits : `91${digits}`;
+  const statusUrl = `${location.origin}/status?phone=${encodeURIComponent(body.phone)}`;
+  const vehicleDesc = [body.make_model, body.color].filter(Boolean).join(' ') || body.car_type;
+  const firstName = body.name.split(' ')[0];
+  const statusMsg = `Hi ${firstName}! Your ${vehicleDesc} (${body.reg_number.toUpperCase()}) has been checked in at Dhulaai Express 🚗\n\nTrack your car's wash status live here:\n${statusUrl}\n\nThank you for choosing us! 😊`;
+  const waWindow = window.open(`https://wa.me/${e164}?text=${encodeURIComponent(statusMsg)}`, '_blank', 'noopener');
+
   const r = await api('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -333,13 +343,13 @@ document.getElementById('car-form').addEventListener('submit', async e => {
   });
 
   if (r.ok) {
-    const job = await r.json();
-
     e.target.reset();
+    clearVehiclePills();
     hideSub(); activeSub = null;
     document.getElementById('price-display').textContent = '₹0';
     switchTab('board', document.querySelector('[data-tab="board"]'));
   } else {
+    if (waWindow) waWindow.close(); // close WhatsApp tab if job creation failed
     const msg = await r.text();
     err.textContent = msg || 'Failed to create job. Please try again.';
   }
