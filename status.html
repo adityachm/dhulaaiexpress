@@ -20,6 +20,7 @@
       --text3:  #64748b;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    .hidden { display: none !important; }
     body {
       background: var(--bg);
       color: var(--text);
@@ -437,10 +438,6 @@
   });
 
   function hidden(el) { el.style.display = 'none'; }
-  HTMLElement.prototype.hidden = false;
-  // polyfill .hidden class toggle used above
-  document.querySelectorAll('.hidden').forEach(el => el.style.display = 'none');
-
   // Auto-load if phone or reg is in the URL (e.g. /status?phone=9876543210)
   (function autoLoad() {
     const params = new URLSearchParams(location.search);
