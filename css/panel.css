@@ -80,8 +80,8 @@ body {
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 18px; border-radius: var(--radius);
-  border: none; cursor: pointer; font-size: 14px; font-weight: 500;
+  padding: 12px 18px; border-radius: var(--radius);
+  border: none; cursor: pointer; font-size: 15px; font-weight: 600;
   transition: opacity .15s, transform .1s;
 }
 .btn:hover { opacity: .88; }

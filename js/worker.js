@@ -413,17 +413,10 @@ function renderJobCard(job) {
   const timeAgo = formatTime(job.created_at);
 
   const actionsByStatus = {
-    received: `
-      <button class="btn btn-primary btn-sm" onclick="changeStatus(${job.id},'in_progress')">▶ Start</button>
-    `,
-    in_progress: `
-      <button class="btn btn-gold btn-sm ${canMarkReady ? '' : 'disabled'}" onclick="changeStatus(${job.id},'ready')" ${canMarkReady ? '' : 'disabled title="Complete checklist first"'}>✓ Mark Ready</button>
-    `,
-    ready: `
-      <button class="btn btn-green btn-sm" onclick="changeStatus(${job.id},'delivered')">🏁 Delivered</button>
-      <button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'ready')">📱 Ready</button>
-    `,
-    delivered: `<button class="btn btn-wa btn-sm" onclick="sendWA(${job.id},'delivered')">📱 Delivered</button>`,
+    received:    `<button class="btn btn-primary btn-full" onclick="changeStatus(${job.id},'in_progress')">▶ Start Wash</button>`,
+    in_progress: `<button class="btn btn-gold btn-full ${canMarkReady ? '' : 'disabled'}" onclick="changeStatus(${job.id},'ready')" ${canMarkReady ? '' : 'disabled title="Complete checklist first"'}>✓ Mark Ready</button>`,
+    ready:       `<button class="btn btn-green btn-full" onclick="changeStatus(${job.id},'delivered')">🏁 Mark Delivered</button>`,
+    delivered:   '',
   };
 
   return `
