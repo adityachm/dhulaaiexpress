@@ -5,7 +5,6 @@ let PIN = '';
 let pricing = null;
 let activeSub = null;
 let boardJobs = [];
-let phoneVerified = false;
 
 // ── Auth helpers ───────────────────────────────────────────────────────
 function api(path, opts = {}) {
@@ -187,15 +186,6 @@ document.getElementById('f-phone').addEventListener('blur', async function() {
 
   document.getElementById('f-name').value = data.customer.name;
 
-  // Skip OTP if this customer's phone has already been verified before
-  if (data.customer.phone_verified) {
-    phoneVerified = true;
-    document.getElementById('otp-block').classList.add('hidden');
-    document.getElementById('phone-verified-badge').classList.remove('hidden');
-    document.getElementById('otp-send-btn').textContent = 'Verified ✓';
-    document.getElementById('otp-send-btn').disabled = true;
-  }
-
   // Show all vehicles as selectable pills; auto-select if only one
   if (data.vehicles && data.vehicles.length) {
     if (data.vehicles.length === 1) {
@@ -280,72 +270,8 @@ document.getElementById('f-reg').addEventListener('blur', async function() {
   }
 });
 
-// ── OTP ────────────────────────────────────────────────────────────────
-window.sendOTP = async function() {
-  const phone = document.getElementById('f-phone').value.trim();
-  if (phone.length < 10) { alert('Enter a valid 10-digit phone number first.'); return; }
-
-  const btn = document.getElementById('otp-send-btn');
-  btn.disabled = true; btn.textContent = 'Generating…';
-
-  const r = await api('/api/otp?action=send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone }),
-  });
-  const data = await r.json().catch(() => ({}));
-
-  btn.disabled = false; btn.textContent = 'Resend OTP';
-
-  if (data.waUrl) {
-    // Set href on the link — worker taps it directly (window.open after await is blocked by browsers)
-    document.getElementById('otp-wa-link').href = data.waUrl;
-    document.getElementById('otp-block').classList.remove('hidden');
-    document.getElementById('otp-status').textContent = '';
-  } else {
-    document.getElementById('otp-block').classList.remove('hidden');
-    document.getElementById('otp-status').textContent = 'Failed to generate OTP. Try again.';
-    document.getElementById('otp-status').style.color = 'var(--red)';
-  }
-
-  phoneVerified = false;
-  document.getElementById('phone-verified-badge').classList.add('hidden');
-};
-
-window.verifyOTP = async function() {
-  const phone = document.getElementById('f-phone').value.trim();
-  const code  = document.getElementById('f-otp').value.trim();
-  if (!code) { alert('Enter the OTP first.'); return; }
-
-  const r = await api('/api/otp?action=verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, code }),
-  });
-  const data = await r.json().catch(() => ({}));
-
-  const statusEl = document.getElementById('otp-status');
-  if (data.valid) {
-    phoneVerified = true;
-    statusEl.textContent = '✓ Phone number verified!';
-    statusEl.style.color = 'var(--green)';
-    document.getElementById('otp-block').classList.add('hidden');
-    document.getElementById('phone-verified-badge').classList.remove('hidden');
-  } else {
-    phoneVerified = false;
-    statusEl.textContent = '✗ ' + (data.error || 'Invalid OTP. Try again or resend.');
-    statusEl.style.color = 'var(--red)';
-  }
-};
-
-// Reset OTP state when phone number changes
+// Autofill clears vehicle pills when phone changes
 document.getElementById('f-phone').addEventListener('input', function() {
-  phoneVerified = false;
-  document.getElementById('otp-block').classList.add('hidden');
-  document.getElementById('phone-verified-badge').classList.add('hidden');
-  const btn = document.getElementById('otp-send-btn');
-  btn.textContent = 'Send OTP';
-  btn.disabled = false;
   clearVehiclePills();
 });
 
@@ -354,11 +280,6 @@ document.getElementById('car-form').addEventListener('submit', async e => {
   e.preventDefault();
   const err = document.getElementById('form-err');
   err.textContent = '';
-
-  if (!phoneVerified) {
-    err.textContent = 'Please verify the customer\'s phone number with OTP before creating the job.';
-    return;
-  }
 
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; btn.textContent = 'Creating…';
@@ -429,11 +350,7 @@ document.getElementById('car-form').addEventListener('submit', async e => {
 
     e.target.reset();
     hideSub(); activeSub = null;
-    phoneVerified = false;
     document.getElementById('price-display').textContent = '₹0';
-    document.getElementById('phone-verified-badge').classList.add('hidden');
-    document.getElementById('otp-block').classList.add('hidden');
-    document.getElementById('otp-send-btn').textContent = 'Send OTP';
     switchTab('board', document.querySelector('[data-tab="board"]'));
   } else {
     const msg = await r.text();
