@@ -178,13 +178,8 @@
                 <option value="4">4 Washes / Month</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Wash Type</label>
-              <select id="f-monthly-wash" onchange="updatePrice()">
-                <option value="normal">Normal Wash</option>
-                <option value="foam">Foam Wash</option>
-              </select>
-            </div>
+            <!-- monthly packages have a single flat price, no wash type selector -->
+            <input type="hidden" id="f-monthly-wash" value="foam">
           </div>
         </div>
 

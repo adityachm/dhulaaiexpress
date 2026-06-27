@@ -196,14 +196,13 @@ document.getElementById('f-phone').addEventListener('blur', async function() {
     document.getElementById('otp-send-btn').disabled = true;
   }
 
-  // Autofill latest vehicle
+  // Show all vehicles as selectable pills; auto-select if only one
   if (data.vehicles && data.vehicles.length) {
-    const v = data.vehicles[0];
-    document.getElementById('f-reg').value = v.reg_number;
-    document.getElementById('f-model').value = v.make_model;
-    document.getElementById('f-color').value = v.color;
-    document.getElementById('f-car-type').value = v.car_type;
-    updatePrice();
+    if (data.vehicles.length === 1) {
+      fillVehicle(data.vehicles[0]);
+    } else {
+      renderVehiclePills(data.vehicles);
+    }
   }
 
   // Show subscription status
@@ -221,6 +220,65 @@ document.getElementById('f-phone').addEventListener('blur', async function() {
 function hideSub() {
   document.getElementById('sub-banner').classList.add('hidden');
 }
+
+function fillVehicle(v) {
+  document.getElementById('f-reg').value   = v.reg_number;
+  document.getElementById('f-model').value = v.make_model;
+  document.getElementById('f-color').value = v.color;
+  document.getElementById('f-car-type').value = v.car_type;
+  clearVehiclePills();
+  updatePrice();
+}
+
+function renderVehiclePills(vehicles) {
+  let el = document.getElementById('vehicle-pills');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'vehicle-pills';
+    el.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;';
+    document.getElementById('f-reg').closest('.form-row').before(el);
+  }
+  el.innerHTML = `<div style="font-size:12px;color:var(--text2);width:100%;margin-bottom:4px;">Select vehicle:</div>` +
+    vehicles.map((v, i) => `
+      <button type="button" onclick="selectVehiclePill(${i})"
+        style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;text-align:left;">
+        <div style="font-weight:600;">${v.reg_number}</div>
+        <div style="font-size:11px;color:var(--text2);">${[v.make_model, v.color].filter(Boolean).join(' ') || v.car_type}</div>
+      </button>
+    `).join('');
+  el._vehicles = vehicles;
+}
+
+function clearVehiclePills() {
+  const el = document.getElementById('vehicle-pills');
+  if (el) el.remove();
+}
+
+window.selectVehiclePill = function(idx) {
+  const el = document.getElementById('vehicle-pills');
+  if (el) fillVehicle(el._vehicles[idx]);
+};
+
+// ── Reg number lookup — fills car details if vehicle already in system ─
+document.getElementById('f-reg').addEventListener('blur', async function() {
+  const reg = this.value.trim().toUpperCase();
+  if (!reg || reg.length < 4) return;
+  // Don't overwrite if already filled by vehicle pill selection
+  if (document.getElementById('f-model').value) return;
+  const r = await api(`/api/customers?reg=${encodeURIComponent(reg)}`);
+  if (!r.ok) return;
+  const vehicle = await r.json();
+  if (vehicle) {
+    document.getElementById('f-model').value = vehicle.make_model || '';
+    document.getElementById('f-color').value  = vehicle.color || '';
+    document.getElementById('f-car-type').value = vehicle.car_type || '';
+    updatePrice();
+    // Show a subtle note if different owner
+    if (vehicle.owner_name && !document.getElementById('f-name').value) {
+      document.getElementById('f-name').value = vehicle.owner_name;
+    }
+  }
+});
 
 // ── OTP ────────────────────────────────────────────────────────────────
 window.sendOTP = async function() {
@@ -288,6 +346,7 @@ document.getElementById('f-phone').addEventListener('input', function() {
   const btn = document.getElementById('otp-send-btn');
   btn.textContent = 'Send OTP';
   btn.disabled = false;
+  clearVehiclePills();
 });
 
 // ── Form submit ────────────────────────────────────────────────────────
@@ -306,9 +365,8 @@ document.getElementById('car-form').addEventListener('submit', async e => {
 
   const mode = document.querySelector('input[name="svc-mode"]:checked')?.value || 'onetime';
   const carType = document.getElementById('f-car-type').value;
-  const washType = mode === 'monthly'
-    ? document.getElementById('f-monthly-wash').value
-    : document.getElementById('f-wash-type').value;
+  // Monthly packages have one flat price (always stored as 'foam' in DB)
+  const washType = mode === 'monthly' ? 'foam' : document.getElementById('f-wash-type').value;
 
   // Collect add-ons
   const addons = [];

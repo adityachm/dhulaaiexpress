@@ -108,13 +108,18 @@ export async function onRequest(context) {
       customer = { id: meta.last_row_id, name: name.trim(), phone: phone.trim() };
     }
 
-    // Upsert vehicle (by reg_number for this customer)
-    let vehicle = await env.DB.prepare('SELECT * FROM vehicles WHERE customer_id = ? AND reg_number = ?').bind(customer.id, reg_number.trim().toUpperCase()).first();
+    // Look up vehicle by reg number globally — same car could be brought by different people
+    let vehicle = await env.DB.prepare('SELECT * FROM vehicles WHERE reg_number = ?').bind(reg_number.trim().toUpperCase()).first();
     if (!vehicle) {
+      // New vehicle — register under the current customer
       const { meta } = await env.DB.prepare(
         'INSERT INTO vehicles (customer_id, reg_number, make_model, color, car_type) VALUES (?, ?, ?, ?, ?)'
       ).bind(customer.id, reg_number.trim().toUpperCase(), make_model || '', color || '', car_type).run();
       vehicle = { id: meta.last_row_id };
+    } else if (make_model || color) {
+      // Update vehicle details if provided (e.g. first record had incomplete info)
+      await env.DB.prepare('UPDATE vehicles SET make_model = COALESCE(NULLIF(?,\'\'), make_model), color = COALESCE(NULLIF(?,\'\'), color), car_type = ? WHERE id = ?')
+        .bind(make_model || '', color || '', car_type, vehicle.id).run();
     }
 
     // Resolve price
@@ -133,7 +138,7 @@ export async function onRequest(context) {
       await env.DB.prepare('UPDATE subscriptions SET washes_used = washes_used + 1 WHERE id = ?').bind(sub.id).run();
     } else if (is_monthly) {
       const row = await env.DB.prepare('SELECT price FROM monthly_pricing WHERE car_type = ? AND frequency = ? AND wash_type = ?')
-        .bind(car_type, Number(frequency), wash_type).first();
+        .bind(car_type, Number(frequency), 'foam').first();
       price = row ? row.price : 0;
     } else {
       const row = await env.DB.prepare('SELECT price FROM wash_pricing WHERE car_type = ? AND wash_type = ?')
