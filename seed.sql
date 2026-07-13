@@ -1,66 +1,69 @@
 -- Dhulaai Express — Seed Data
 -- Run after schema.sql: wrangler d1 execute dhulaai-db --file ./seed.sql
 
--- ── One-time wash pricing matrix ─────────────────────────────────────────
+-- ── One-time wash pricing matrix (Wash Menu, July 2026) ──────────────────
+-- Menu lists "Sedan / Compact SUV" as one category — both rows share prices.
 INSERT OR IGNORE INTO wash_pricing (car_type, wash_type, price) VALUES
-  ('Hatchback',   'top',    199),
-  ('Hatchback',   'normal', 299),
-  ('Hatchback',   'foam',   499),
-  ('Sedan',       'top',    249),
-  ('Sedan',       'normal', 349),
-  ('Sedan',       'foam',   599),
-  ('Compact SUV', 'top',    299),
-  ('Compact SUV', 'normal', 399),
-  ('Compact SUV', 'foam',   699),
-  ('Mid SUV',     'top',    349),
-  ('Mid SUV',     'normal', 499),
-  ('Mid SUV',     'foam',   799),
-  ('Large SUV',   'top',    399),
-  ('Large SUV',   'normal', 599),
-  ('Large SUV',   'foam',   899),
-  ('Luxury Car',  'top',    499),
-  ('Luxury Car',  'normal', 699),
-  ('Luxury Car',  'foam',   1199);
+  ('Hatchback',   'top',    200),
+  ('Hatchback',   'normal', 300),
+  ('Hatchback',   'foam',   350),
+  ('Sedan',       'top',    250),
+  ('Sedan',       'normal', 350),
+  ('Sedan',       'foam',   400),
+  ('Compact SUV', 'top',    250),
+  ('Compact SUV', 'normal', 350),
+  ('Compact SUV', 'foam',   400),
+  ('Mid SUV',     'top',    300),
+  ('Mid SUV',     'normal', 400),
+  ('Mid SUV',     'foam',   600),
+  ('Large SUV',   'top',    350),
+  ('Large SUV',   'normal', 500),
+  ('Large SUV',   'foam',   700),
+  ('Luxury Car',  'top',    500),
+  ('Luxury Car',  'normal', 700),
+  ('Luxury Car',  'foam',   900);
 
--- ── Monthly package pricing matrix ───────────────────────────────────────
+-- ── Monthly package pricing matrix (Wash Menu, July 2026) ────────────────
+-- The menu has a single package price per car type & frequency (includes
+-- 6 days of waterless cleaning), so 'normal' and 'foam' share the price.
 INSERT OR IGNORE INTO monthly_pricing (car_type, frequency, wash_type, price) VALUES
-  ('Hatchback',   1, 'normal', 249),  ('Hatchback',   1, 'foam',   399),
-  ('Hatchback',   2, 'normal', 449),  ('Hatchback',   2, 'foam',   749),
-  ('Hatchback',   4, 'normal', 799),  ('Hatchback',   4, 'foam',   1299),
-  ('Sedan',       1, 'normal', 299),  ('Sedan',       1, 'foam',   499),
-  ('Sedan',       2, 'normal', 549),  ('Sedan',       2, 'foam',   949),
-  ('Sedan',       4, 'normal', 999),  ('Sedan',       4, 'foam',   1699),
-  ('Compact SUV', 1, 'normal', 349),  ('Compact SUV', 1, 'foam',   599),
-  ('Compact SUV', 2, 'normal', 649),  ('Compact SUV', 2, 'foam',   1099),
-  ('Compact SUV', 4, 'normal', 1199), ('Compact SUV', 4, 'foam',   1999),
-  ('Mid SUV',     1, 'normal', 449),  ('Mid SUV',     1, 'foam',   749),
-  ('Mid SUV',     2, 'normal', 799),  ('Mid SUV',     2, 'foam',   1349),
-  ('Mid SUV',     4, 'normal', 1449), ('Mid SUV',     4, 'foam',   2499),
-  ('Large SUV',   1, 'normal', 549),  ('Large SUV',   1, 'foam',   899),
-  ('Large SUV',   2, 'normal', 999),  ('Large SUV',   2, 'foam',   1699),
-  ('Large SUV',   4, 'normal', 1799), ('Large SUV',   4, 'foam',   2999),
-  ('Luxury Car',  1, 'normal', 699),  ('Luxury Car',  1, 'foam',   1199),
-  ('Luxury Car',  2, 'normal', 1249), ('Luxury Car',  2, 'foam',   2099),
-  ('Luxury Car',  4, 'normal', 2299), ('Luxury Car',  4, 'foam',   3999);
+  ('Hatchback',   1, 'normal', 849),  ('Hatchback',   1, 'foam',   849),
+  ('Hatchback',   2, 'normal', 1249), ('Hatchback',   2, 'foam',   1249),
+  ('Hatchback',   4, 'normal', 1949), ('Hatchback',   4, 'foam',   1949),
+  ('Sedan',       1, 'normal', 949),  ('Sedan',       1, 'foam',   949),
+  ('Sedan',       2, 'normal', 1449), ('Sedan',       2, 'foam',   1449),
+  ('Sedan',       4, 'normal', 2149), ('Sedan',       4, 'foam',   2149),
+  ('Compact SUV', 1, 'normal', 949),  ('Compact SUV', 1, 'foam',   949),
+  ('Compact SUV', 2, 'normal', 1449), ('Compact SUV', 2, 'foam',   1449),
+  ('Compact SUV', 4, 'normal', 2149), ('Compact SUV', 4, 'foam',   2149),
+  ('Mid SUV',     1, 'normal', 1049), ('Mid SUV',     1, 'foam',   1049),
+  ('Mid SUV',     2, 'normal', 1549), ('Mid SUV',     2, 'foam',   1549),
+  ('Mid SUV',     4, 'normal', 2349), ('Mid SUV',     4, 'foam',   2349),
+  ('Large SUV',   1, 'normal', 1249), ('Large SUV',   1, 'foam',   1249),
+  ('Large SUV',   2, 'normal', 1749), ('Large SUV',   2, 'foam',   1749),
+  ('Large SUV',   4, 'normal', 2449), ('Large SUV',   4, 'foam',   2449),
+  ('Luxury Car',  1, 'normal', 1449), ('Luxury Car',  1, 'foam',   1449),
+  ('Luxury Car',  2, 'normal', 1949), ('Luxury Car',  2, 'foam',   1949),
+  ('Luxury Car',  4, 'normal', 2949), ('Luxury Car',  4, 'foam',   2949);
 
--- ── Add-on services ───────────────────────────────────────────────────────
+-- ── Add-on services (Wash Menu, July 2026) ────────────────────────────────
 INSERT OR IGNORE INTO addon_services (id, name, base_price) VALUES
-  (1, 'Dry Cleaning', 999),
+  (1, 'Dry Cleaning', 1249),
   (2, 'Full Rubbing', 1499);
 
 INSERT OR IGNORE INTO addon_pricing (addon_id, car_type, price) VALUES
-  (1, 'Hatchback',    999),
-  (1, 'Sedan',        1299),
-  (1, 'Compact SUV',  1499),
-  (1, 'Mid SUV',      1799),
-  (1, 'Large SUV',    1999),
-  (1, 'Luxury Car',   2499),
+  (1, 'Hatchback',    1249),
+  (1, 'Sedan',        1549),
+  (1, 'Compact SUV',  1549),
+  (1, 'Mid SUV',      1849),
+  (1, 'Large SUV',    2049),
+  (1, 'Luxury Car',   2549),
   (2, 'Hatchback',    1499),
-  (2, 'Sedan',        1999),
-  (2, 'Compact SUV',  2499),
-  (2, 'Mid SUV',      2999),
-  (2, 'Large SUV',    3499),
-  (2, 'Luxury Car',   4999);
+  (2, 'Sedan',        1799),
+  (2, 'Compact SUV',  1799),
+  (2, 'Mid SUV',      1999),
+  (2, 'Large SUV',    2399),
+  (2, 'Luxury Car',   2999);
 
 -- ── Checkpoint templates ──────────────────────────────────────────────────
 INSERT OR IGNORE INTO checkpoint_templates (service_key, steps) VALUES
