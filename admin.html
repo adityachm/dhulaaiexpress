@@ -236,23 +236,16 @@
     <div class="form-row">
       <div class="form-group">
         <label>Car Type</label>
-        <select id="sub-car-type"></select>
+        <select id="sub-car-type" onchange="updateSubPrice()"></select>
       </div>
       <div class="form-group">
-        <label>Wash Type</label>
-        <select id="sub-wash-type">
-          <option value="normal">Normal Wash</option>
-          <option value="foam">Foam Wash</option>
+        <label>Membership Type</label>
+        <select id="sub-plan" onchange="updateSubPrice()">
+          <option value="1">🚗 Essential Care — 1 wash/month</option>
+          <option value="2">🚗 Signature Care — 2 washes/month</option>
+          <option value="4">🚗 Elite Care — 4 washes/month</option>
         </select>
       </div>
-    </div>
-    <div class="form-group">
-      <label>Frequency</label>
-      <select id="sub-frequency">
-        <option value="1">1 Wash / Month</option>
-        <option value="2">2 Washes / Month</option>
-        <option value="4">4 Washes / Month</option>
-      </select>
     </div>
     <div class="form-group" style="margin-bottom:16px;">
       <label>Price (₹ / month) — edit to give a custom rate</label>

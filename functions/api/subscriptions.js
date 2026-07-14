@@ -98,8 +98,9 @@ export async function onRequest(context) {
       price = row.price;
     }
 
-    const washLabel = wash_type === 'foam' ? 'Foam Wash' : 'Normal Wash';
-    const plan_label = `${frequency}× ${washLabel}/month — ${car_type}`;
+    const TIER_NAMES = { 1: 'Essential Care', 2: 'Signature Care', 4: 'Elite Care' };
+    const tier = TIER_NAMES[Number(frequency)] || `${frequency}×/month`;
+    const plan_label = `${tier} — ${frequency}× wash/month — ${car_type}`;
     const start_date = new Date().toISOString().split('T')[0];
     const end_date = addDays(start_date, 30);
 

@@ -528,7 +528,9 @@ window.deactivateSub = async function(id) {
 };
 
 // New membership modal
-window.openNewSubModal = function() {
+window.openNewSubModal = async function() {
+  if (!pricing) await loadPricing(); // retry if the initial fetch failed
+  populateSubCarTypes();
   subCustomerId = null;
   subVehicles = [];
   ['sub-phone', 'sub-name', 'sub-veh-reg', 'sub-veh-model', 'sub-veh-color'].forEach(id => {
@@ -591,9 +593,8 @@ window.subPhoneLookup = async function() {
 window.updateSubPrice = function() {
   if (!pricing) return;
   const ct = document.getElementById('sub-car-type')?.value;
-  const wt = document.getElementById('sub-wash-type')?.value;
-  const fr = Number(document.getElementById('sub-frequency')?.value);
-  const price = ct && wt && fr ? (pricing.monthly?.[ct]?.[fr]?.[wt] || 0) : 0;
+  const fr = Number(document.getElementById('sub-plan')?.value);
+  const price = ct && fr ? (pricing.monthly?.[ct]?.[fr]?.foam || 0) : 0;
   const input = document.getElementById('sub-price');
   if (input) input.value = price || '';
   const hint = document.getElementById('sub-price-hint');
@@ -638,8 +639,8 @@ window.createSubscription = async function() {
     customer_id: subCustomerId,
     ...vehicleFields,
     car_type: document.getElementById('sub-car-type').value,
-    wash_type: document.getElementById('sub-wash-type').value,
-    frequency: Number(document.getElementById('sub-frequency').value),
+    wash_type: 'foam',
+    frequency: Number(document.getElementById('sub-plan').value),
     price: Number(priceVal),
   };
   const r = await api('/api/subscriptions', { method: 'POST', body: JSON.stringify(body) });
@@ -656,19 +657,17 @@ async function loadPricing() {
   const r = await apiRaw('/api/pricing', { headers: { 'X-Admin-Secret': SECRET } });
   if (!r.ok) return;
   pricing = await r.json();
+  populateSubCarTypes();
+}
 
-  // Populate sub modal car type select
+function populateSubCarTypes() {
   const ctSel = document.getElementById('sub-car-type');
-  if (ctSel && !ctSel.options.length) {
-    pricing.car_types.forEach(ct => {
-      const o = document.createElement('option');
-      o.value = ct; o.textContent = ct;
-      ctSel.appendChild(o);
-    });
-    ['sub-car-type','sub-wash-type','sub-frequency'].forEach(id => {
-      document.getElementById(id)?.addEventListener('change', updateSubPrice);
-    });
-  }
+  if (!ctSel || !pricing || ctSel.options.length) return;
+  pricing.car_types.forEach(ct => {
+    const o = document.createElement('option');
+    o.value = ct; o.textContent = ct;
+    ctSel.appendChild(o);
+  });
 }
 
 async function loadManage() {
@@ -713,7 +712,8 @@ function renderMonthlyPrices() {
   const freqs = [1, 2, 4];
   let html = '<div style="font-size:12px;">';
   freqs.forEach(fr => {
-    html += `<div style="margin-bottom:10px;"><b style="color:var(--text2);">${fr}×/month</b><div class="tbl-wrap"><table><thead><tr><th>Car Type</th><th>Normal</th><th>Foam</th></tr></thead><tbody>`;
+    const tierName = { 1: 'Essential Care', 2: 'Signature Care', 4: 'Elite Care' }[fr] || '';
+    html += `<div style="margin-bottom:10px;"><b style="color:var(--text2);">${tierName} (${fr}×/month)</b><div class="tbl-wrap"><table><thead><tr><th>Car Type</th><th>Normal</th><th>Foam</th></tr></thead><tbody>`;
     pricing.car_types.forEach(ct => {
       html += `<tr><td style="font-size:12px;">${ct}</td>`;
       wts.forEach(wt => {
