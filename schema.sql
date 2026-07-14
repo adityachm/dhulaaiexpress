@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS checkpoint_templates (
 CREATE TABLE IF NOT EXISTS subscriptions (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   customer_id  INTEGER NOT NULL REFERENCES customers(id),
+  vehicle_id   INTEGER REFERENCES vehicles(id), -- NULL only on legacy rows
   car_type     TEXT    NOT NULL,
   wash_type    TEXT    NOT NULL,
   frequency    INTEGER NOT NULL,

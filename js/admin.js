@@ -1,4 +1,4 @@
-import { sendStatus, setAuthHeaders } from './whatsapp.js';
+import { sendStatus, sendExpiryNudge, setAuthHeaders } from './whatsapp.js';
 
 // ── State ──────────────────────────────────────────────────────────────
 let SECRET = '';
@@ -7,6 +7,9 @@ let allJobs = [];
 let allSubs = [];
 let settings = {};
 let subCustomerId = null;
+let subVehicles = [];
+let memberFilter = 'active';
+let expiringSubs = [];
 
 // ── Auth helpers ───────────────────────────────────────────────────────
 function api(path, opts = {}) {
@@ -238,7 +241,7 @@ function renderSummary(d) {
         <tbody>${topRows || '<tr><td colspan="4" class="empty-state">No data</td></tr>'}</tbody></table></div>
       </div>
       <div class="card">
-        <h4 style="margin-bottom:12px;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;">Subscriptions</h4>
+        <h4 style="margin-bottom:12px;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;">Memberships</h4>
         <div style="font-size:14px;">
           <div style="padding:8px 0;border-bottom:1px solid var(--border);">Active: <b class="text-green">${d.subscriptions?.active_count||0}</b></div>
           <div style="padding:8px 0;border-bottom:1px solid var(--border);">Expiring in 7 days: <b class="text-orange">${d.subscriptions?.expiring_soon||0}</b></div>
@@ -388,39 +391,69 @@ window.deleteJob = async function(jobId) {
   loadCars();
 };
 
-// ── Subscriptions ──────────────────────────────────────────────────────
+// ── Membership ─────────────────────────────────────────────────────────
 async function loadSubs() {
-  const [activeR, expiringR] = await Promise.all([
-    api('/api/subscriptions'),
+  const [allR, expiringR] = await Promise.all([
+    api('/api/subscriptions?status=all'),
     api('/api/subscriptions?expiring_soon=1'),
   ]);
-  allSubs = await activeR.json();
-  const expiring = expiringR.ok ? await expiringR.json() : [];
-  renderSubs(allSubs, expiring);
+  allSubs = await allR.json();
+  expiringSubs = expiringR.ok ? await expiringR.json() : [];
+  renderMembers();
 }
 
-function renderSubs(subs, expiring) {
+function memberStatus(s) {
+  if (!s.is_active) return 'expired';
+  return s.end_date >= new Date().toISOString().split('T')[0] ? 'active' : 'expired';
+}
+
+window.setMemberFilter = function(filter, btn) {
+  memberFilter = filter;
+  ['active', 'expired', 'all'].forEach(f => {
+    const b = document.getElementById(`member-filter-${f}`);
+    if (b) b.className = `btn btn-sm ${f === filter ? 'btn-gold' : 'btn-ghost'}`;
+  });
+  renderMembers();
+};
+
+window.renderMembers = function() {
   const tbody = document.getElementById('subs-body');
   const empty = document.getElementById('subs-empty');
   const exBanner = document.getElementById('subs-expiring');
 
-  if (expiring.length) {
-    document.getElementById('subs-expiring-list').textContent = expiring.map(s => `${s.customer_name} (${s.plan_label})`).join(', ');
+  if (expiringSubs.length) {
+    document.getElementById('subs-expiring-list').textContent =
+      expiringSubs.map(s => `${s.customer_name}${s.reg_number ? ' · ' + s.reg_number : ''} (${s.plan_label})`).join(', ');
     exBanner.classList.remove('hidden');
   } else {
     exBanner.classList.add('hidden');
   }
 
+  const q = (document.getElementById('member-search')?.value || '').trim().toLowerCase();
+  const subs = allSubs.filter(s => {
+    if (memberFilter !== 'all' && memberStatus(s) !== memberFilter) return false;
+    if (!q) return true;
+    return [s.customer_name, s.customer_phone, s.reg_number, s.make_model]
+      .some(v => v && String(v).toLowerCase().includes(q));
+  });
+
   if (!subs.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   tbody.innerHTML = subs.map(s => {
-    const remaining = s.washes_total - s.washes_used;
     const pct = Math.round(s.washes_used / s.washes_total * 100);
-    const nearExpiry = new Date(s.end_date) <= new Date(Date.now() + 7*86400000);
+    const status = memberStatus(s);
+    const nearExpiry = status === 'active' && new Date(s.end_date) <= new Date(Date.now() + 2*86400000);
+    const vehicle = s.reg_number
+      ? `<b>${s.reg_number}</b>${s.make_model ? `<div style="font-size:11px;color:var(--text2);">${s.make_model}</div>` : ''}`
+      : '<span class="text-muted">Any (legacy)</span>';
+    const badge = status === 'active'
+      ? '<span class="text-green" style="font-size:12px;font-weight:600;">● Active</span>'
+      : '<span class="text-muted" style="font-size:12px;font-weight:600;">○ Expired</span>';
     return `
       <tr>
         <td>${s.customer_name}</td>
         <td>${s.customer_phone}</td>
+        <td>${vehicle}</td>
         <td>${s.plan_label}</td>
         <td>
           <div style="display:flex;align-items:center;gap:8px;">
@@ -430,31 +463,84 @@ function renderSubs(subs, expiring) {
         </td>
         <td class="${nearExpiry ? 'text-orange' : ''}">${s.end_date}</td>
         <td class="text-gold">₹${s.price.toLocaleString('en-IN')}</td>
-        <td>
-          <button class="btn btn-red btn-sm" onclick="deactivateSub(${s.id})">Deactivate</button>
+        <td>${badge}</td>
+        <td style="white-space:nowrap;">
+          ${nearExpiry ? `<button class="btn btn-wa btn-sm" onclick="nudgeMember(${s.id})">📱 Nudge</button>` : ''}
+          <button class="btn btn-gold btn-sm" onclick="renewMembership(${s.id})">Renew</button>
+          ${status === 'active' ? `<button class="btn btn-red btn-sm" onclick="deactivateSub(${s.id})">Deactivate</button>` : ''}
         </td>
       </tr>
     `;
   }).join('');
-}
+};
+
+window.nudgeMember = async function(id) {
+  const s = allSubs.find(x => x.id === id);
+  if (s) await sendExpiryNudge(s);
+};
+
+window.renewMembership = async function(id) {
+  const s = allSubs.find(x => x.id === id);
+  if (!s) return;
+  if (!s.vehicle_id) {
+    alert('This is a legacy membership without a vehicle. Use “+ Add Member” to create it against a specific car.');
+    return;
+  }
+  const price = pricing?.monthly?.[s.car_type]?.[s.frequency]?.[s.wash_type] ?? s.price;
+  if (!confirm(`Renew ${s.plan_label} for ${s.customer_name} (${s.reg_number}) — ₹${price.toLocaleString('en-IN')} for 30 days?`)) return;
+  const r = await api('/api/subscriptions', { method: 'POST', body: JSON.stringify({
+    customer_id: s.customer_id,
+    vehicle_id: s.vehicle_id,
+    car_type: s.car_type,
+    wash_type: s.wash_type,
+    frequency: s.frequency,
+  }) });
+  if (r.ok) loadSubs();
+  else alert(await r.text());
+};
 
 window.deactivateSub = async function(id) {
-  if (!confirm('Deactivate this subscription?')) return;
+  if (!confirm('Deactivate this membership?')) return;
   await api(`/api/subscriptions/${id}`, { method: 'PATCH', body: JSON.stringify({ deactivate: true }) });
   loadSubs();
 };
 
-// New subscription modal
+// New membership modal
 window.openNewSubModal = function() {
   subCustomerId = null;
+  subVehicles = [];
   document.getElementById('sub-phone').value = '';
   document.getElementById('sub-customer-info').classList.add('hidden');
   document.getElementById('sub-modal-err').textContent = '';
+  renderSubVehicleOptions();
   updateSubPrice();
   document.getElementById('sub-modal').classList.add('open');
 };
 
 window.closeSubModal = function() { document.getElementById('sub-modal').classList.remove('open'); };
+
+function renderSubVehicleOptions() {
+  const sel = document.getElementById('sub-vehicle');
+  if (!sel) return;
+  if (!subVehicles.length) {
+    sel.innerHTML = '<option value="">— look up customer first —</option>';
+    return;
+  }
+  sel.innerHTML = subVehicles.map(v =>
+    `<option value="${v.id}">${v.reg_number}${v.make_model ? ' — ' + v.make_model : ''} (${v.car_type})</option>`
+  ).join('');
+  onSubVehicleChange();
+}
+
+window.onSubVehicleChange = function() {
+  const id = Number(document.getElementById('sub-vehicle')?.value);
+  const v = subVehicles.find(x => x.id === id);
+  if (v) {
+    const ctSel = document.getElementById('sub-car-type');
+    if (ctSel) ctSel.value = v.car_type;
+  }
+  updateSubPrice();
+};
 
 window.subPhoneLookup = async function() {
   const phone = document.getElementById('sub-phone').value.trim();
@@ -465,17 +551,18 @@ window.subPhoneLookup = async function() {
   const info = document.getElementById('sub-customer-info');
   if (data) {
     subCustomerId = data.customer.id;
-    info.textContent = `Found: ${data.customer.name}`;
+    subVehicles = data.vehicles || [];
+    info.textContent = subVehicles.length
+      ? `Found: ${data.customer.name}`
+      : `Found: ${data.customer.name} — no vehicles on record; add their car via the worker panel first.`;
     info.classList.remove('hidden');
-    if (data.vehicles?.[0]) {
-      const ctSel = document.getElementById('sub-car-type');
-      if (ctSel) ctSel.value = data.vehicles[0].car_type;
-    }
   } else {
     subCustomerId = null;
+    subVehicles = [];
     info.textContent = 'Customer not found — they must be registered via the worker panel first.';
     info.classList.remove('hidden');
   }
+  renderSubVehicleOptions();
   updateSubPrice();
 };
 
@@ -491,8 +578,11 @@ window.updateSubPrice = function() {
 window.createSubscription = async function() {
   const err = document.getElementById('sub-modal-err');
   if (!subCustomerId) { err.textContent = 'Look up customer phone first.'; return; }
+  const vehicleId = Number(document.getElementById('sub-vehicle').value);
+  if (!vehicleId) { err.textContent = 'Select the vehicle this membership is for.'; return; }
   const body = {
     customer_id: subCustomerId,
+    vehicle_id: vehicleId,
     car_type: document.getElementById('sub-car-type').value,
     wash_type: document.getElementById('sub-wash-type').value,
     frequency: Number(document.getElementById('sub-frequency').value),
@@ -757,12 +847,13 @@ window.saveCptTemplate = async function(serviceKey) {
 };
 
 function renderWaTemplates() {
-  const keys = ['tpl_received', 'tpl_inprogress', 'tpl_ready', 'tpl_delivered'];
+  const keys = ['tpl_received', 'tpl_inprogress', 'tpl_ready', 'tpl_delivered', 'tpl_expiring'];
   const labels = {
     tpl_received: 'Car Received',
     tpl_inprogress: 'In Progress',
     tpl_ready: 'Ready for Pickup',
     tpl_delivered: 'Delivered',
+    tpl_expiring: 'Membership Expiring (vars: {name} {plan} {reg} {expiry} {price})',
   };
   document.getElementById('wa-templates').innerHTML = keys.map(k => `
     <div class="form-group">

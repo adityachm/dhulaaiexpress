@@ -128,11 +128,12 @@ export async function onRequest(context) {
     let payment_mode = body.payment_mode || 'cash';
 
     if (payment_mode === 'sub') {
-      // Find active subscription and decrement
+      // Membership is per vehicle — find one for this car (legacy rows with
+      // NULL vehicle_id still cover any of the customer's vehicles)
       const sub = await env.DB.prepare(
-        'SELECT * FROM subscriptions WHERE customer_id = ? AND is_active = 1 AND date(end_date) >= date(\'now\') AND washes_used < washes_total LIMIT 1'
-      ).bind(customer.id).first();
-      if (!sub) return new Response('No active subscription with washes remaining', { status: 400, headers: CORS });
+        'SELECT * FROM subscriptions WHERE customer_id = ? AND (vehicle_id = ? OR vehicle_id IS NULL) AND is_active = 1 AND date(end_date) >= date(\'now\') AND washes_used < washes_total ORDER BY vehicle_id IS NULL LIMIT 1'
+      ).bind(customer.id, vehicle.id).first();
+      if (!sub) return new Response('No active membership with washes remaining for this vehicle', { status: 400, headers: CORS });
       sub_id = sub.id;
       price = 0; // subscription covers base wash
       await env.DB.prepare('UPDATE subscriptions SET washes_used = washes_used + 1 WHERE id = ?').bind(sub.id).run();

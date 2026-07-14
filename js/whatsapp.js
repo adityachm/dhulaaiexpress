@@ -45,9 +45,31 @@ export async function sendStatus(job, statusKey) {
   };
 
   const message = fillTemplate(tpl, vars);
-  const url = `https://wa.me/${countryPhone}?text=${encodeURIComponent(message)}`;
+  openWa(countryPhone, message);
+}
 
-  // Open as a proper anchor click to avoid popup blockers
+export async function sendExpiryNudge(sub) {
+  const settings = await loadSettings();
+  const tpl = settings.tpl_expiring || '';
+  if (!tpl) { alert('No WhatsApp template set for membership expiry (tpl_expiring).'); return; }
+
+  const phone = (sub.customer_phone || '').replace(/\D/g, '');
+  const countryPhone = phone.startsWith('91') ? phone : `91${phone}`;
+
+  const vars = {
+    name: sub.customer_name || '',
+    plan: sub.plan_label || '',
+    reg: sub.reg_number || '',
+    expiry: sub.end_date || '',
+    price: sub.price ? `₹${sub.price.toLocaleString('en-IN')}` : '',
+  };
+
+  openWa(countryPhone, fillTemplate(tpl, vars));
+}
+
+// Open as a proper anchor click to avoid popup blockers
+function openWa(countryPhone, message) {
+  const url = `https://wa.me/${countryPhone}?text=${encodeURIComponent(message)}`;
   const a = document.createElement('a');
   a.href = url; a.target = '_blank'; a.rel = 'noopener';
   document.body.appendChild(a); a.click(); a.remove();

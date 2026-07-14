@@ -19,20 +19,34 @@ export async function onRequest(context) {
 
   if (request.method === 'GET') {
     const phone = url.searchParams.get('phone');
+    const reg   = url.searchParams.get('reg');
+
+    // Vehicle lookup by reg number — returns vehicle + its registered owner name
+    if (reg) {
+      const vehicle = await env.DB.prepare(
+        'SELECT v.*, c.name as owner_name FROM vehicles v JOIN customers c ON v.customer_id = c.id WHERE v.reg_number = ? LIMIT 1'
+      ).bind(reg.trim().toUpperCase()).first();
+      return new Response(JSON.stringify(vehicle || null), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
 
     if (phone) {
-      // Autofill lookup — return customer + their vehicles + active subscription
+      // Autofill lookup — return customer + ALL their vehicles + active subscription
       const customer = await env.DB.prepare('SELECT * FROM customers WHERE phone = ?').bind(phone).first();
       if (!customer) return new Response(JSON.stringify(null), { headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-      const [vehicles, activeSub] = await Promise.all([
+      const [vehicles, activeSubs] = await Promise.all([
         env.DB.prepare('SELECT * FROM vehicles WHERE customer_id = ? ORDER BY created_at DESC').bind(customer.id).all(),
         env.DB.prepare(
-          'SELECT * FROM subscriptions WHERE customer_id = ? AND is_active = 1 AND date(end_date) >= date(\'now\') ORDER BY created_at DESC LIMIT 1'
-        ).bind(customer.id).first(),
+          'SELECT s.*, v.reg_number FROM subscriptions s LEFT JOIN vehicles v ON s.vehicle_id = v.id WHERE s.customer_id = ? AND s.is_active = 1 AND date(s.end_date) >= date(\'now\') ORDER BY s.created_at DESC'
+        ).bind(customer.id).all(),
       ]);
 
-      return new Response(JSON.stringify({ customer, vehicles: vehicles.results, active_subscription: activeSub || null }), {
+      return new Response(JSON.stringify({
+        customer,
+        vehicles: vehicles.results,
+        active_subscriptions: activeSubs.results,
+        active_subscription: activeSubs.results[0] || null, // legacy shape
+      }), {
         headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }

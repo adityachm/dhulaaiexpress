@@ -33,7 +33,7 @@
       <button class="active" data-tab="dash"  onclick="switchTab('dash',this)">Dashboard</button>
       <button data-tab="summary"              onclick="switchTab('summary',this)">Summary</button>
       <button data-tab="cars"                 onclick="switchTab('cars',this)">Cars</button>
-      <button data-tab="subs"                 onclick="switchTab('subs',this)">Subscriptions</button>
+      <button data-tab="subs"                 onclick="switchTab('subs',this)">Membership</button>
       <button data-tab="manage"               onclick="switchTab('manage',this)">Manage</button>
     </div>
     <button class="logout" onclick="logout()">Logout</button>
@@ -120,24 +120,33 @@
     <div id="cars-empty" class="empty-state hidden">No records found.</div>
   </div>
 
-  <!-- ── Subscriptions ──────────────────────────────────────────────── -->
+  <!-- ── Membership ─────────────────────────────────────────────────── -->
   <div id="tab-subs" class="page">
     <div class="section-header">
-      <h2>Subscriptions</h2>
-      <button class="btn btn-gold btn-sm" onclick="openNewSubModal()">+ New / Renew</button>
+      <h2>Membership</h2>
+      <button class="btn btn-gold btn-sm" onclick="openNewSubModal()">+ Add Member</button>
     </div>
     <div id="subs-expiring" class="hidden card" style="border-color:var(--orange);margin-bottom:16px;padding:12px 16px;">
-      <span class="sub-expiring">⚠ Expiring within 7 days: </span><span id="subs-expiring-list"></span>
+      <span class="sub-expiring">⚠ Expiring within 2 days: </span><span id="subs-expiring-list"></span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px;">
+      <div class="btn-group" style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-gold" id="member-filter-active" onclick="setMemberFilter('active',this)">Active</button>
+        <button class="btn btn-sm btn-ghost" id="member-filter-expired" onclick="setMemberFilter('expired',this)">Expired</button>
+        <button class="btn btn-sm btn-ghost" id="member-filter-all" onclick="setMemberFilter('all',this)">All</button>
+      </div>
+      <input id="member-search" type="search" placeholder="Search name, phone or reg no…"
+        oninput="renderMembers()" style="flex:1;min-width:200px;max-width:320px;">
     </div>
     <div class="tbl-wrap">
       <table>
         <thead>
-          <tr><th>Customer</th><th>Phone</th><th>Plan</th><th>Washes</th><th>Expiry</th><th>Price</th><th>Actions</th></tr>
+          <tr><th>Member</th><th>Phone</th><th>Vehicle</th><th>Plan</th><th>Washes</th><th>Expiry</th><th>Price</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody id="subs-body"></tbody>
       </table>
     </div>
-    <div id="subs-empty" class="empty-state hidden">No active subscriptions.</div>
+    <div id="subs-empty" class="empty-state hidden">No members found.</div>
   </div>
 
   <!-- ── Manage ─────────────────────────────────────────────────────── -->
@@ -188,16 +197,20 @@
 
 </div><!-- /dashboard -->
 
-<!-- ── New Subscription Modal ─────────────────────────────────────────── -->
+<!-- ── New Membership Modal ───────────────────────────────────────────── -->
 <div class="modal-overlay" id="sub-modal">
   <div class="modal">
-    <h3>Create / Renew Subscription</h3>
+    <h3>Add / Renew Membership</h3>
     <div id="sub-modal-err" class="err"></div>
     <div class="form-group">
       <label>Customer Phone</label>
       <input id="sub-phone" type="tel" placeholder="9876543210" oninput="subPhoneLookup()">
     </div>
     <div id="sub-customer-info" class="hidden text-muted text-sm" style="margin-bottom:10px;"></div>
+    <div class="form-group">
+      <label>Vehicle (membership is tied to this car)</label>
+      <select id="sub-vehicle" onchange="onSubVehicleChange()"></select>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Car Type</label>
@@ -222,7 +235,7 @@
     <div id="sub-price-display" class="price-badge mt8" style="margin-bottom:16px;">₹—</div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeSubModal()">Cancel</button>
-      <button class="btn btn-gold" onclick="createSubscription()">Create Subscription</button>
+      <button class="btn btn-gold" onclick="createSubscription()">Add Membership</button>
     </div>
   </div>
 </div>

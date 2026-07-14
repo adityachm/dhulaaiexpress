@@ -195,12 +195,15 @@ document.getElementById('f-phone').addEventListener('blur', async function() {
     }
   }
 
-  // Show subscription status
-  activeSub = data.active_subscription;
-  if (activeSub) {
-    const remaining = activeSub.washes_total - activeSub.washes_used;
-    document.getElementById('sub-info').textContent =
-      `${activeSub.plan_label} — ${remaining} wash${remaining !== 1 ? 'es' : ''} left (expires ${activeSub.end_date})`;
+  // Show membership status — one line per vehicle with an active plan
+  const subs = data.active_subscriptions || (data.active_subscription ? [data.active_subscription] : []);
+  activeSub = subs[0] || null;
+  if (subs.length) {
+    document.getElementById('sub-info').textContent = subs.map(s => {
+      const remaining = s.washes_total - s.washes_used;
+      const veh = s.reg_number ? `${s.reg_number}: ` : '';
+      return `${veh}${s.plan_label} — ${remaining} wash${remaining !== 1 ? 'es' : ''} left (expires ${s.end_date})`;
+    }).join('  ·  ');
     document.getElementById('sub-banner').classList.remove('hidden');
   } else {
     hideSub();
