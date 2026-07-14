@@ -141,7 +141,7 @@
     <div class="tbl-wrap">
       <table>
         <thead>
-          <tr><th>Member</th><th>Phone</th><th>Vehicle</th><th>Plan</th><th>Washes</th><th>Expiry</th><th>Price</th><th>Status</th><th>Actions</th></tr>
+          <tr><th>Member</th><th>Phone</th><th>Vehicle</th><th>Plan</th><th>Washes</th><th>Expiry</th><th>Price</th><th>Payment</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody id="subs-body"></tbody>
       </table>
@@ -202,14 +202,36 @@
   <div class="modal">
     <h3>Add / Renew Membership</h3>
     <div id="sub-modal-err" class="err"></div>
-    <div class="form-group">
-      <label>Customer Phone</label>
-      <input id="sub-phone" type="tel" placeholder="9876543210" oninput="subPhoneLookup()">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Customer Phone</label>
+        <input id="sub-phone" type="tel" placeholder="9876543210" oninput="subPhoneLookup()">
+      </div>
+      <div class="form-group">
+        <label>Customer Name</label>
+        <input id="sub-name" type="text" placeholder="Full name">
+      </div>
     </div>
     <div id="sub-customer-info" class="hidden text-muted text-sm" style="margin-bottom:10px;"></div>
     <div class="form-group">
       <label>Vehicle (membership is tied to this car)</label>
       <select id="sub-vehicle" onchange="onSubVehicleChange()"></select>
+    </div>
+    <div id="sub-new-vehicle" class="hidden">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Reg Number</label>
+          <input id="sub-veh-reg" type="text" placeholder="UK07AB1234" style="text-transform:uppercase;">
+        </div>
+        <div class="form-group">
+          <label>Make &amp; Model</label>
+          <input id="sub-veh-model" type="text" placeholder="Swift, Creta…">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Color</label>
+        <input id="sub-veh-color" type="text" placeholder="White">
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -232,7 +254,13 @@
         <option value="4">4 Washes / Month</option>
       </select>
     </div>
-    <div id="sub-price-display" class="price-badge mt8" style="margin-bottom:16px;">₹—</div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Price (₹ / month) — edit to give a custom rate</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input id="sub-price" type="number" min="0" style="max-width:140px;">
+        <span id="sub-price-hint" class="text-muted text-sm"></span>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeSubModal()">Cancel</button>
       <button class="btn btn-gold" onclick="createSubscription()">Add Membership</button>

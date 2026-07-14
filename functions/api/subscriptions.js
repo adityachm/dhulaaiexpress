@@ -60,19 +60,43 @@ export async function onRequest(context) {
   if (request.method === 'POST') {
     if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
 
-    const { customer_id, vehicle_id, car_type, wash_type, frequency } = await request.json();
-    if (!customer_id || !vehicle_id || !car_type || !wash_type || !frequency) {
+    const { customer_id, vehicle_id, vehicle: newVehicle, car_type, wash_type, frequency, price: customPrice } = await request.json();
+    if (!customer_id || !car_type || !wash_type || !frequency || (!vehicle_id && !newVehicle?.reg_number)) {
       return new Response('Missing required fields', { status: 400, headers: CORS });
     }
 
-    // Membership is per vehicle — make sure it belongs to this customer
-    const vehicle = await env.DB.prepare('SELECT * FROM vehicles WHERE id = ? AND customer_id = ?')
-      .bind(Number(vehicle_id), customer_id).first();
-    if (!vehicle) return new Response('Vehicle not found for this customer', { status: 400, headers: CORS });
+    // Membership is per vehicle — use an existing one (must belong to this
+    // customer) or register a new vehicle inline from the admin panel
+    let vehicle;
+    if (vehicle_id) {
+      vehicle = await env.DB.prepare('SELECT * FROM vehicles WHERE id = ? AND customer_id = ?')
+        .bind(Number(vehicle_id), customer_id).first();
+      if (!vehicle) return new Response('Vehicle not found for this customer', { status: 400, headers: CORS });
+    } else {
+      const reg = newVehicle.reg_number.trim().toUpperCase();
+      vehicle = await env.DB.prepare('SELECT * FROM vehicles WHERE reg_number = ?').bind(reg).first();
+      if (vehicle && vehicle.customer_id !== customer_id) {
+        return new Response(`Vehicle ${reg} is already registered to another customer`, { status: 400, headers: CORS });
+      }
+      if (!vehicle) {
+        const { meta } = await env.DB.prepare(
+          'INSERT INTO vehicles (customer_id, reg_number, make_model, color, car_type) VALUES (?, ?, ?, ?, ?)'
+        ).bind(customer_id, reg, newVehicle.make_model || '', newVehicle.color || '', car_type).run();
+        vehicle = { id: meta.last_row_id };
+      }
+    }
 
-    const row = await env.DB.prepare('SELECT price FROM monthly_pricing WHERE car_type = ? AND frequency = ? AND wash_type = ?')
-      .bind(car_type, Number(frequency), wash_type).first();
-    if (!row) return new Response('Pricing not found', { status: 400, headers: CORS });
+    // Admin may override the list price (discounts, grandfathered rates)
+    let price;
+    if (customPrice !== undefined && customPrice !== null && customPrice !== '') {
+      price = Number(customPrice);
+      if (!Number.isFinite(price) || price < 0) return new Response('Invalid price', { status: 400, headers: CORS });
+    } else {
+      const row = await env.DB.prepare('SELECT price FROM monthly_pricing WHERE car_type = ? AND frequency = ? AND wash_type = ?')
+        .bind(car_type, Number(frequency), wash_type).first();
+      if (!row) return new Response('Pricing not found', { status: 400, headers: CORS });
+      price = row.price;
+    }
 
     const washLabel = wash_type === 'foam' ? 'Foam Wash' : 'Normal Wash';
     const plan_label = `${frequency}× ${washLabel}/month — ${car_type}`;
@@ -87,7 +111,7 @@ export async function onRequest(context) {
     const { meta } = await env.DB.prepare(`
       INSERT INTO subscriptions (customer_id, vehicle_id, car_type, wash_type, frequency, plan_label, price, washes_total, start_date, end_date)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(customer_id, vehicle.id, car_type, wash_type, Number(frequency), plan_label, row.price, Number(frequency), start_date, end_date).run();
+    `).bind(customer_id, vehicle.id, car_type, wash_type, Number(frequency), plan_label, price, Number(frequency), start_date, end_date).run();
 
     return new Response(JSON.stringify({ id: meta.last_row_id }), { status: 201, headers: { ...CORS, 'Content-Type': 'application/json' } });
   }

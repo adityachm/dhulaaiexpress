@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   start_date   TEXT    NOT NULL,
   end_date     TEXT    NOT NULL,
   is_active    INTEGER NOT NULL DEFAULT 1,
+  is_paid      INTEGER NOT NULL DEFAULT 0, -- admin marks paid separately
+  paid_at      TEXT,
   created_at   TEXT    DEFAULT (datetime('now'))
 );
 

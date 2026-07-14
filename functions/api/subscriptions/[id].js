@@ -28,6 +28,16 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
+    if (body.paid !== undefined) {
+      if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
+      if (body.paid) {
+        await env.DB.prepare("UPDATE subscriptions SET is_paid = 1, paid_at = datetime('now') WHERE id = ?").bind(id).run();
+      } else {
+        await env.DB.prepare('UPDATE subscriptions SET is_paid = 0, paid_at = NULL WHERE id = ?').bind(id).run();
+      }
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
+
     return new Response('Nothing to update', { status: 400, headers: CORS });
   }
 

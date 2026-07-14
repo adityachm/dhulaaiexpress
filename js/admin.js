@@ -449,6 +449,9 @@ window.renderMembers = function() {
     const badge = status === 'active'
       ? '<span class="text-green" style="font-size:12px;font-weight:600;">● Active</span>'
       : '<span class="text-muted" style="font-size:12px;font-weight:600;">○ Expired</span>';
+    const payment = s.is_paid
+      ? `<span class="text-green" style="font-size:12px;font-weight:600;cursor:pointer;" title="Paid ${s.paid_at || ''} — click to mark unpaid" onclick="togglePaid(${s.id}, false)">✓ Paid</span>`
+      : `<button class="btn btn-gold btn-sm" onclick="togglePaid(${s.id}, true)">Mark Paid</button>`;
     return `
       <tr>
         <td>${s.customer_name}</td>
@@ -463,6 +466,7 @@ window.renderMembers = function() {
         </td>
         <td class="${nearExpiry ? 'text-orange' : ''}">${s.end_date}</td>
         <td class="text-gold">₹${s.price.toLocaleString('en-IN')}</td>
+        <td>${payment}</td>
         <td>${badge}</td>
         <td style="white-space:nowrap;">
           ${nearExpiry ? `<button class="btn btn-wa btn-sm" onclick="nudgeMember(${s.id})">📱 Nudge</button>` : ''}
@@ -472,6 +476,17 @@ window.renderMembers = function() {
       </tr>
     `;
   }).join('');
+};
+
+window.togglePaid = async function(id, paid) {
+  const s = allSubs.find(x => x.id === id);
+  if (!s) return;
+  const msg = paid
+    ? `Mark ₹${s.price.toLocaleString('en-IN')} as received from ${s.customer_name}?`
+    : `Mark this membership as UNPAID again?`;
+  if (!confirm(msg)) return;
+  await api(`/api/subscriptions/${id}`, { method: 'PATCH', body: JSON.stringify({ paid }) });
+  loadSubs();
 };
 
 window.nudgeMember = async function(id) {
@@ -486,14 +501,21 @@ window.renewMembership = async function(id) {
     alert('This is a legacy membership without a vehicle. Use “+ Add Member” to create it against a specific car.');
     return;
   }
-  const price = pricing?.monthly?.[s.car_type]?.[s.frequency]?.[s.wash_type] ?? s.price;
-  if (!confirm(`Renew ${s.plan_label} for ${s.customer_name} (${s.reg_number}) — ₹${price.toLocaleString('en-IN')} for 30 days?`)) return;
+  const listPrice = pricing?.monthly?.[s.car_type]?.[s.frequency]?.[s.wash_type] ?? s.price;
+  const entered = prompt(
+    `Renew ${s.plan_label} for ${s.customer_name} (${s.reg_number}) — 30 days.\nPrice (₹/month, edit for a custom rate):`,
+    listPrice
+  );
+  if (entered === null) return;
+  const price = Number(entered);
+  if (!Number.isFinite(price) || price < 0) { alert('Invalid price.'); return; }
   const r = await api('/api/subscriptions', { method: 'POST', body: JSON.stringify({
     customer_id: s.customer_id,
     vehicle_id: s.vehicle_id,
     car_type: s.car_type,
     wash_type: s.wash_type,
     frequency: s.frequency,
+    price,
   }) });
   if (r.ok) loadSubs();
   else alert(await r.text());
@@ -509,7 +531,9 @@ window.deactivateSub = async function(id) {
 window.openNewSubModal = function() {
   subCustomerId = null;
   subVehicles = [];
-  document.getElementById('sub-phone').value = '';
+  ['sub-phone', 'sub-name', 'sub-veh-reg', 'sub-veh-model', 'sub-veh-color'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
   document.getElementById('sub-customer-info').classList.add('hidden');
   document.getElementById('sub-modal-err').textContent = '';
   renderSubVehicleOptions();
@@ -522,19 +546,16 @@ window.closeSubModal = function() { document.getElementById('sub-modal').classLi
 function renderSubVehicleOptions() {
   const sel = document.getElementById('sub-vehicle');
   if (!sel) return;
-  if (!subVehicles.length) {
-    sel.innerHTML = '<option value="">— look up customer first —</option>';
-    return;
-  }
   sel.innerHTML = subVehicles.map(v =>
     `<option value="${v.id}">${v.reg_number}${v.make_model ? ' — ' + v.make_model : ''} (${v.car_type})</option>`
-  ).join('');
+  ).join('') + '<option value="new">+ Add new vehicle…</option>';
   onSubVehicleChange();
 }
 
 window.onSubVehicleChange = function() {
-  const id = Number(document.getElementById('sub-vehicle')?.value);
-  const v = subVehicles.find(x => x.id === id);
+  const val = document.getElementById('sub-vehicle')?.value;
+  document.getElementById('sub-new-vehicle').classList.toggle('hidden', val !== 'new');
+  const v = subVehicles.find(x => x.id === Number(val));
   if (v) {
     const ctSel = document.getElementById('sub-car-type');
     if (ctSel) ctSel.value = v.car_type;
@@ -552,14 +573,15 @@ window.subPhoneLookup = async function() {
   if (data) {
     subCustomerId = data.customer.id;
     subVehicles = data.vehicles || [];
+    document.getElementById('sub-name').value = data.customer.name;
     info.textContent = subVehicles.length
       ? `Found: ${data.customer.name}`
-      : `Found: ${data.customer.name} — no vehicles on record; add their car via the worker panel first.`;
+      : `Found: ${data.customer.name} — no vehicles on record; add the car details below.`;
     info.classList.remove('hidden');
   } else {
     subCustomerId = null;
     subVehicles = [];
-    info.textContent = 'Customer not found — they must be registered via the worker panel first.';
+    info.textContent = 'New customer — enter their name and vehicle details.';
     info.classList.remove('hidden');
   }
   renderSubVehicleOptions();
@@ -572,20 +594,53 @@ window.updateSubPrice = function() {
   const wt = document.getElementById('sub-wash-type')?.value;
   const fr = Number(document.getElementById('sub-frequency')?.value);
   const price = ct && wt && fr ? (pricing.monthly?.[ct]?.[fr]?.[wt] || 0) : 0;
-  document.getElementById('sub-price-display').textContent = `₹${price.toLocaleString('en-IN')}`;
+  const input = document.getElementById('sub-price');
+  if (input) input.value = price || '';
+  const hint = document.getElementById('sub-price-hint');
+  if (hint) hint.textContent = price ? `List price: ₹${price.toLocaleString('en-IN')}` : '';
 };
 
 window.createSubscription = async function() {
   const err = document.getElementById('sub-modal-err');
-  if (!subCustomerId) { err.textContent = 'Look up customer phone first.'; return; }
-  const vehicleId = Number(document.getElementById('sub-vehicle').value);
-  if (!vehicleId) { err.textContent = 'Select the vehicle this membership is for.'; return; }
+  const phone = document.getElementById('sub-phone').value.trim();
+  const name = document.getElementById('sub-name').value.trim();
+  if (phone.length < 10) { err.textContent = 'Enter the customer phone number.'; return; }
+
+  const priceVal = document.getElementById('sub-price').value;
+  if (priceVal === '' || Number(priceVal) < 0) { err.textContent = 'Enter a valid price.'; return; }
+
+  // Vehicle: existing one, or new details entered inline
+  const vehicleVal = document.getElementById('sub-vehicle').value;
+  let vehicleFields = {};
+  if (vehicleVal === 'new') {
+    const reg = document.getElementById('sub-veh-reg').value.trim().toUpperCase();
+    if (!reg) { err.textContent = 'Enter the vehicle reg number.'; return; }
+    vehicleFields.vehicle = {
+      reg_number: reg,
+      make_model: document.getElementById('sub-veh-model').value.trim(),
+      color: document.getElementById('sub-veh-color').value.trim(),
+    };
+  } else if (Number(vehicleVal)) {
+    vehicleFields.vehicle_id = Number(vehicleVal);
+  } else {
+    err.textContent = 'Select or add the vehicle this membership is for.'; return;
+  }
+
+  // New customer — create them from phone + name
+  if (!subCustomerId) {
+    if (!name) { err.textContent = 'Enter the customer name.'; return; }
+    const cr = await api('/api/customers', { method: 'POST', body: JSON.stringify({ name, phone }) });
+    if (!cr.ok) { err.textContent = await cr.text(); return; }
+    subCustomerId = (await cr.json()).id;
+  }
+
   const body = {
     customer_id: subCustomerId,
-    vehicle_id: vehicleId,
+    ...vehicleFields,
     car_type: document.getElementById('sub-car-type').value,
     wash_type: document.getElementById('sub-wash-type').value,
     frequency: Number(document.getElementById('sub-frequency').value),
+    price: Number(priceVal),
   };
   const r = await api('/api/subscriptions', { method: 'POST', body: JSON.stringify(body) });
   if (r.ok) {
