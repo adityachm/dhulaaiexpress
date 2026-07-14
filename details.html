@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Your Details — Dhulaai Express</title>
+  <style>
+    :root {
+      --bg:     #0a0e1a;
+      --bg2:    #111827;
+      --bg3:    #1a2235;
+      --border: #1e2d45;
+      --gold:   #f5c842;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --text:   #e2e8f0;
+      --text2:  #94a3b8;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    .hidden { display: none !important; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    header { text-align: center; padding: 32px 20px 24px; background: linear-gradient(180deg, #0d1829 0%, var(--bg) 100%); border-bottom: 1px solid var(--border); }
+    header .brand { font-size: 22px; font-weight: 800; color: var(--gold); letter-spacing: .5px; }
+    header .tagline { font-size: 13px; color: var(--text2); margin-top: 4px; }
+    .wrap { max-width: 480px; margin: 32px auto; padding: 0 16px; }
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 28px 24px; }
+    .card h2 { font-size: 17px; margin-bottom: 6px; }
+    .card p  { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+    label { display: block; font-size: 12px; color: var(--text2); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .5px; }
+    input[type="text"] {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 12px 14px; font-size: 15px; outline: none;
+    }
+    input:focus { border-color: var(--gold); }
+    button {
+      width: 100%; margin-top: 22px; background: var(--gold); color: #0a0e1a; border: none;
+      border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 700; cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: default; }
+    .msg { margin-top: 14px; font-size: 13px; text-align: center; }
+    .msg.ok { color: var(--green); }
+    .msg.err { color: var(--red); }
+    .veh { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 6px; }
+    .veh b { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">DHULAAI EXPRESS</div>
+    <div class="tagline">Premium Car Care — Dehradun</div>
+  </header>
+
+  <div class="wrap">
+    <div class="card" id="form-card">
+      <h2 id="greet">Your parking &amp; address details</h2>
+      <p>So our team can find and care for your car every day, please confirm the details below.</p>
+      <div class="veh hidden" id="veh-box"></div>
+
+      <label for="f-building">Building Name</label>
+      <input type="text" id="f-building" placeholder="e.g. Windlass Tower A" maxlength="80">
+
+      <label for="f-flat">Flat Number</label>
+      <input type="text" id="f-flat" placeholder="e.g. 1204" maxlength="80">
+
+      <label for="f-parking">Parking Number (if available)</label>
+      <input type="text" id="f-parking" placeholder="e.g. B2-45" maxlength="80">
+
+      <button id="save-btn" onclick="save()">Save Details</button>
+      <div class="msg hidden" id="msg"></div>
+    </div>
+
+    <div class="card hidden" id="invalid-card">
+      <h2>Link not valid</h2>
+      <p>This link is invalid or no longer active. Please ask us on WhatsApp for a fresh link.</p>
+    </div>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(location.search).get('token') || '';
+    const $ = id => document.getElementById(id);
+
+    async function load() {
+      const r = await fetch(`/api/member-info?token=${encodeURIComponent(token)}`);
+      if (!r.ok) {
+        $('form-card').classList.add('hidden');
+        $('invalid-card').classList.remove('hidden');
+        return;
+      }
+      const d = await r.json();
+      $('greet').textContent = `Hi ${d.name} — your parking & address details`;
+      if (d.reg_number) {
+        $('veh-box').innerHTML = `Car: <b>${d.reg_number}</b>${d.make_model ? ' — ' + d.make_model : ''}`;
+        $('veh-box').classList.remove('hidden');
+      }
+      $('f-building').value = d.building_name || '';
+      $('f-flat').value = d.flat_number || '';
+      $('f-parking').value = d.parking_number || '';
+    }
+
+    async function save() {
+      const btn = $('save-btn'), msg = $('msg');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      msg.classList.add('hidden');
+      const r = await fetch(`/api/member-info?token=${encodeURIComponent(token)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          building_name: $('f-building').value,
+          flat_number: $('f-flat').value,
+          parking_number: $('f-parking').value,
+        }),
+      });
+      btn.disabled = false; btn.textContent = 'Save Details';
+      msg.classList.remove('hidden');
+      if (r.ok) {
+        msg.className = 'msg ok';
+        msg.textContent = '✓ Saved — thank you! You can close this page.';
+      } else {
+        msg.className = 'msg err';
+        msg.textContent = 'Could not save. Please try again.';
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

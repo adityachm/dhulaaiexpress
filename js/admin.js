@@ -1,4 +1,4 @@
-import { sendStatus, sendExpiryNudge, setAuthHeaders } from './whatsapp.js';
+import { sendStatus, sendExpiryNudge, sendMemberMessage, setAuthHeaders } from './whatsapp.js';
 
 // ── State ──────────────────────────────────────────────────────────────
 let SECRET = '';
@@ -433,7 +433,7 @@ window.renderMembers = function() {
   const subs = allSubs.filter(s => {
     if (memberFilter !== 'all' && memberStatus(s) !== memberFilter) return false;
     if (!q) return true;
-    return [s.customer_name, s.customer_phone, s.reg_number, s.make_model]
+    return [s.customer_name, s.customer_phone, s.reg_number, s.make_model, s.building_name, s.flat_number, s.parking_number]
       .some(v => v && String(v).toLowerCase().includes(q));
   });
 
@@ -443,18 +443,22 @@ window.renderMembers = function() {
     const pct = Math.round(s.washes_used / s.washes_total * 100);
     const status = memberStatus(s);
     const nearExpiry = status === 'active' && new Date(s.end_date) <= new Date(Date.now() + 2*86400000);
+    const residence = [s.building_name, s.flat_number].filter(Boolean).join(' · ');
+    const member = `${s.customer_name}${residence ? `<div style="font-size:11px;color:var(--text2);">🏢 ${residence}</div>` : ''}`;
+    const vehicleSub = [s.make_model, s.parking_number ? `P: ${s.parking_number}` : ''].filter(Boolean).join(' · ');
     const vehicle = s.reg_number
-      ? `<b>${s.reg_number}</b>${s.make_model ? `<div style="font-size:11px;color:var(--text2);">${s.make_model}</div>` : ''}`
+      ? `<b>${s.reg_number}</b>${vehicleSub ? `<div style="font-size:11px;color:var(--text2);">${vehicleSub}</div>` : ''}`
       : '<span class="text-muted">Any (legacy)</span>';
     const badge = status === 'active'
       ? '<span class="text-green" style="font-size:12px;font-weight:600;">● Active</span>'
       : '<span class="text-muted" style="font-size:12px;font-weight:600;">○ Expired</span>';
     const payment = s.is_paid
       ? `<span class="text-green" style="font-size:12px;font-weight:600;cursor:pointer;" title="Paid ${s.paid_at || ''} — click to mark unpaid" onclick="togglePaid(${s.id}, false)">✓ Paid</span>`
-      : `<button class="btn btn-gold btn-sm" onclick="togglePaid(${s.id}, true)">Mark Paid</button>`;
+      : `<button class="btn btn-gold btn-sm" onclick="togglePaid(${s.id}, true)">Mark Paid</button>
+         <button class="btn btn-wa btn-sm" title="Ask for payment on WhatsApp" onclick="nudgePayment(${s.id})">📱</button>`;
     return `
       <tr>
-        <td>${s.customer_name}</td>
+        <td>${member}</td>
         <td>${s.customer_phone}</td>
         <td>${vehicle}</td>
         <td>${s.plan_label}</td>
@@ -470,6 +474,7 @@ window.renderMembers = function() {
         <td>${badge}</td>
         <td style="white-space:nowrap;">
           ${nearExpiry ? `<button class="btn btn-wa btn-sm" onclick="nudgeMember(${s.id})">📱 Nudge</button>` : ''}
+          <button class="btn btn-ghost btn-sm" title="Edit residence & parking" onclick="editMember(${s.id})">✎</button>
           <button class="btn btn-gold btn-sm" onclick="renewMembership(${s.id})">Renew</button>
           ${status === 'active' ? `<button class="btn btn-red btn-sm" onclick="deactivateSub(${s.id})">Deactivate</button>` : ''}
         </td>
@@ -492,6 +497,48 @@ window.togglePaid = async function(id, paid) {
 window.nudgeMember = async function(id) {
   const s = allSubs.find(x => x.id === id);
   if (s) await sendExpiryNudge(s);
+};
+
+window.nudgePayment = async function(id) {
+  const s = allSubs.find(x => x.id === id);
+  if (s) await sendMemberMessage(s, 'tpl_payment');
+};
+
+// ── Member details (residence & parking) ───────────────────────────────
+let editSubId = null;
+
+window.editMember = function(id) {
+  const s = allSubs.find(x => x.id === id);
+  if (!s) return;
+  editSubId = id;
+  document.getElementById('med-info').textContent = `${s.customer_name} · ${s.customer_phone}${s.reg_number ? ' · ' + s.reg_number : ''}`;
+  document.getElementById('med-err').textContent = '';
+  document.getElementById('med-building').value = s.building_name || '';
+  document.getElementById('med-flat').value = s.flat_number || '';
+  document.getElementById('med-parking').value = s.parking_number || '';
+  document.getElementById('member-edit-modal').classList.add('open');
+};
+
+window.closeMemberEditModal = function() { document.getElementById('member-edit-modal').classList.remove('open'); };
+
+window.saveMemberDetails = async function() {
+  const r = await api(`/api/subscriptions/${editSubId}`, { method: 'PATCH', body: JSON.stringify({ details: {
+    building_name: document.getElementById('med-building').value.trim(),
+    flat_number: document.getElementById('med-flat').value.trim(),
+    parking_number: document.getElementById('med-parking').value.trim(),
+  } }) });
+  if (r.ok) { closeMemberEditModal(); loadSubs(); }
+  else document.getElementById('med-err').textContent = await r.text();
+};
+
+window.requestMemberInfo = async function() {
+  const s = allSubs.find(x => x.id === editSubId);
+  if (!s) return;
+  const r = await api(`/api/subscriptions/${editSubId}`, { method: 'PATCH', body: JSON.stringify({ make_info_token: true }) });
+  if (!r.ok) { document.getElementById('med-err').textContent = await r.text(); return; }
+  const { token } = await r.json();
+  const info_url = `${location.origin}/details?token=${token}`;
+  await sendMemberMessage(s, 'tpl_info', { info_url });
 };
 
 window.renewMembership = async function(id) {
@@ -533,7 +580,7 @@ window.openNewSubModal = async function() {
   populateSubCarTypes();
   subCustomerId = null;
   subVehicles = [];
-  ['sub-phone', 'sub-name', 'sub-veh-reg', 'sub-veh-model', 'sub-veh-color'].forEach(id => {
+  ['sub-phone', 'sub-name', 'sub-building', 'sub-flat', 'sub-parking', 'sub-veh-reg', 'sub-veh-model', 'sub-veh-color'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('sub-customer-info').classList.add('hidden');
@@ -561,6 +608,7 @@ window.onSubVehicleChange = function() {
   if (v) {
     const ctSel = document.getElementById('sub-car-type');
     if (ctSel) ctSel.value = v.car_type;
+    document.getElementById('sub-parking').value = v.parking_number || '';
   }
   updateSubPrice();
 };
@@ -576,6 +624,8 @@ window.subPhoneLookup = async function() {
     subCustomerId = data.customer.id;
     subVehicles = data.vehicles || [];
     document.getElementById('sub-name').value = data.customer.name;
+    document.getElementById('sub-building').value = data.customer.building_name || '';
+    document.getElementById('sub-flat').value = data.customer.flat_number || '';
     info.textContent = subVehicles.length
       ? `Found: ${data.customer.name}`
       : `Found: ${data.customer.name} — no vehicles on record; add the car details below.`;
@@ -642,6 +692,9 @@ window.createSubscription = async function() {
     wash_type: 'foam',
     frequency: Number(document.getElementById('sub-plan').value),
     price: Number(priceVal),
+    building_name: document.getElementById('sub-building').value.trim(),
+    flat_number: document.getElementById('sub-flat').value.trim(),
+    parking_number: document.getElementById('sub-parking').value.trim(),
   };
   const r = await api('/api/subscriptions', { method: 'POST', body: JSON.stringify(body) });
   if (r.ok) {
@@ -902,13 +955,15 @@ window.saveCptTemplate = async function(serviceKey) {
 };
 
 function renderWaTemplates() {
-  const keys = ['tpl_received', 'tpl_inprogress', 'tpl_ready', 'tpl_delivered', 'tpl_expiring'];
+  const keys = ['tpl_received', 'tpl_inprogress', 'tpl_ready', 'tpl_delivered', 'tpl_expiring', 'tpl_payment', 'tpl_info'];
   const labels = {
     tpl_received: 'Car Received',
     tpl_inprogress: 'In Progress',
     tpl_ready: 'Ready for Pickup',
     tpl_delivered: 'Delivered',
     tpl_expiring: 'Membership Expiring (vars: {name} {plan} {reg} {expiry} {price})',
+    tpl_payment: 'Payment Reminder (vars: {name} {plan} {reg} {price})',
+    tpl_info: 'Ask Member Details (vars: {name} {reg} {info_url})',
   };
   document.getElementById('wa-templates').innerHTML = keys.map(k => `
     <div class="form-group">

@@ -213,6 +213,20 @@
       </div>
     </div>
     <div id="sub-customer-info" class="hidden text-muted text-sm" style="margin-bottom:10px;"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Building Name</label>
+        <input id="sub-building" type="text" placeholder="e.g. Windlass Tower A">
+      </div>
+      <div class="form-group">
+        <label>Flat Number</label>
+        <input id="sub-flat" type="text" placeholder="e.g. 1204">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Parking Number (if available)</label>
+      <input id="sub-parking" type="text" placeholder="e.g. B2-45">
+    </div>
     <div class="form-group">
       <label>Vehicle (membership is tied to this car)</label>
       <select id="sub-vehicle" onchange="onSubVehicleChange()"></select>
@@ -257,6 +271,35 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeSubModal()">Cancel</button>
       <button class="btn btn-gold" onclick="createSubscription()">Add Membership</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Member Details Modal ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="member-edit-modal">
+  <div class="modal">
+    <h3>Member Details</h3>
+    <div id="med-info" class="text-muted text-sm" style="margin-bottom:12px;"></div>
+    <div id="med-err" class="err"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Building Name</label>
+        <input id="med-building" type="text" placeholder="e.g. Windlass Tower A">
+      </div>
+      <div class="form-group">
+        <label>Flat Number</label>
+        <input id="med-flat" type="text" placeholder="e.g. 1204">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Parking Number (if available)</label>
+      <input id="med-parking" type="text" placeholder="e.g. B2-45">
+    </div>
+    <p class="text-muted text-sm" style="margin-bottom:16px;">Or let the member fill this in themselves — sends them a private form link on WhatsApp.</p>
+    <div class="modal-footer">
+      <button class="btn btn-wa btn-sm" onclick="requestMemberInfo()">📱 Ask Member</button>
+      <button class="btn btn-ghost" onclick="closeMemberEditModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveMemberDetails()">Save</button>
     </div>
   </div>
 </div>

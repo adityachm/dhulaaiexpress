@@ -48,10 +48,12 @@ export async function sendStatus(job, statusKey) {
   openWa(countryPhone, message);
 }
 
-export async function sendExpiryNudge(sub) {
+// Generic membership WhatsApp message from a settings template.
+// Vars available: {name} {plan} {reg} {expiry} {price} + any extras passed in.
+export async function sendMemberMessage(sub, tplKey, extraVars = {}) {
   const settings = await loadSettings();
-  const tpl = settings.tpl_expiring || '';
-  if (!tpl) { alert('No WhatsApp template set for membership expiry (tpl_expiring).'); return; }
+  const tpl = settings[tplKey] || '';
+  if (!tpl) { alert(`No WhatsApp template set (${tplKey}). Add it in Manage → WhatsApp Templates.`); return; }
 
   const phone = (sub.customer_phone || '').replace(/\D/g, '');
   const countryPhone = phone.startsWith('91') ? phone : `91${phone}`;
@@ -62,10 +64,13 @@ export async function sendExpiryNudge(sub) {
     reg: sub.reg_number || '',
     expiry: sub.end_date || '',
     price: sub.price ? `₹${sub.price.toLocaleString('en-IN')}` : '',
+    ...extraVars,
   };
 
   openWa(countryPhone, fillTemplate(tpl, vars));
 }
+
+export function sendExpiryNudge(sub) { return sendMemberMessage(sub, 'tpl_expiring'); }
 
 // Open as a proper anchor click to avoid popup blockers
 function openWa(countryPhone, message) {

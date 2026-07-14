@@ -36,7 +36,8 @@ export async function onRequest(context) {
 
     let query = `
       SELECT s.*, c.name as customer_name, c.phone as customer_phone,
-             v.reg_number, v.make_model
+             c.building_name, c.flat_number,
+             v.reg_number, v.make_model, v.parking_number
       FROM subscriptions s
       JOIN customers c ON s.customer_id = c.id
       LEFT JOIN vehicles v ON s.vehicle_id = v.id
@@ -60,7 +61,8 @@ export async function onRequest(context) {
   if (request.method === 'POST') {
     if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
 
-    const { customer_id, vehicle_id, vehicle: newVehicle, car_type, wash_type, frequency, price: customPrice } = await request.json();
+    const { customer_id, vehicle_id, vehicle: newVehicle, car_type, wash_type, frequency, price: customPrice,
+            building_name, flat_number, parking_number } = await request.json();
     if (!customer_id || !car_type || !wash_type || !frequency || (!vehicle_id && !newVehicle?.reg_number)) {
       return new Response('Missing required fields', { status: 400, headers: CORS });
     }
@@ -84,6 +86,17 @@ export async function onRequest(context) {
         ).bind(customer_id, reg, newVehicle.make_model || '', newVehicle.color || '', car_type).run();
         vehicle = { id: meta.last_row_id };
       }
+    }
+
+    // Residence & parking details (Windlass building/flat on the customer,
+    // parking spot on the vehicle) — update whatever was provided
+    if (building_name !== undefined || flat_number !== undefined) {
+      await env.DB.prepare("UPDATE customers SET building_name = COALESCE(?, building_name), flat_number = COALESCE(?, flat_number) WHERE id = ?")
+        .bind(building_name ?? null, flat_number ?? null, customer_id).run();
+    }
+    if (parking_number !== undefined) {
+      await env.DB.prepare('UPDATE vehicles SET parking_number = ? WHERE id = ?')
+        .bind(parking_number, vehicle.id).run();
     }
 
     // Admin may override the list price (discounts, grandfathered rates)

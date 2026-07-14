@@ -2,20 +2,23 @@
 -- Run: wrangler d1 execute dhulaai-db --file ./schema.sql (--local for dev, --remote for prod)
 
 CREATE TABLE IF NOT EXISTS customers (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  name       TEXT    NOT NULL,
-  phone      TEXT    NOT NULL UNIQUE,
-  created_at TEXT    DEFAULT (datetime('now'))
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT    NOT NULL,
+  phone         TEXT    NOT NULL UNIQUE,
+  building_name TEXT    NOT NULL DEFAULT '', -- e.g. Windlass tower/block
+  flat_number   TEXT    NOT NULL DEFAULT '',
+  created_at    TEXT    DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS vehicles (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  customer_id INTEGER NOT NULL REFERENCES customers(id),
-  reg_number  TEXT    NOT NULL,
-  make_model  TEXT    NOT NULL DEFAULT '',
-  color       TEXT    NOT NULL DEFAULT '',
-  car_type    TEXT    NOT NULL,
-  created_at  TEXT    DEFAULT (datetime('now'))
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id    INTEGER NOT NULL REFERENCES customers(id),
+  reg_number     TEXT    NOT NULL,
+  make_model     TEXT    NOT NULL DEFAULT '',
+  color          TEXT    NOT NULL DEFAULT '',
+  car_type       TEXT    NOT NULL,
+  parking_number TEXT    NOT NULL DEFAULT '',
+  created_at     TEXT    DEFAULT (datetime('now'))
 );
 
 -- One-time wash price matrix: car_type × wash_type
@@ -67,6 +70,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   is_active    INTEGER NOT NULL DEFAULT 1,
   is_paid      INTEGER NOT NULL DEFAULT 0, -- admin marks paid separately
   paid_at      TEXT,
+  info_token   TEXT,                       -- token for the member details link
   created_at   TEXT    DEFAULT (datetime('now'))
 );
 

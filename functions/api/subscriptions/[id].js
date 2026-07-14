@@ -28,6 +28,34 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
+    // Update residence/parking for the member (customer + vehicle of this sub)
+    if (body.details) {
+      if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
+      const sub = await env.DB.prepare('SELECT * FROM subscriptions WHERE id = ?').bind(id).first();
+      if (!sub) return new Response('Not found', { status: 404, headers: CORS });
+      const { building_name, flat_number, parking_number } = body.details;
+      await env.DB.prepare('UPDATE customers SET building_name = ?, flat_number = ? WHERE id = ?')
+        .bind(building_name ?? '', flat_number ?? '', sub.customer_id).run();
+      if (sub.vehicle_id) {
+        await env.DB.prepare('UPDATE vehicles SET parking_number = ? WHERE id = ?')
+          .bind(parking_number ?? '', sub.vehicle_id).run();
+      }
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
+
+    // Generate (or reuse) the shareable details-form token
+    if (body.make_info_token) {
+      if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
+      const sub = await env.DB.prepare('SELECT info_token FROM subscriptions WHERE id = ?').bind(id).first();
+      if (!sub) return new Response('Not found', { status: 404, headers: CORS });
+      let token = sub.info_token;
+      if (!token) {
+        token = crypto.randomUUID().replace(/-/g, '');
+        await env.DB.prepare('UPDATE subscriptions SET info_token = ? WHERE id = ?').bind(token, id).run();
+      }
+      return new Response(JSON.stringify({ token }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
+    }
+
     if (body.paid !== undefined) {
       if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
       if (body.paid) {

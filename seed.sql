@@ -82,4 +82,6 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
   ('tpl_inprogress',  'Hi {name}! Your {car} ({reg}) is now being washed at Dhulaai Express. We will notify you when it''s ready! ✨'),
   ('tpl_ready',       'Hi {name}! ✅ Your {car} ({reg}) is ready for pickup at Dhulaai Express. Amount: ₹{amount}. Thank you for choosing us!'),
   ('tpl_delivered',   'Hi {name}! 🎉 Your {car} ({reg}) has been delivered. Thank you for visiting Dhulaai Express, Dehradun. See you next time!'),
-  ('tpl_expiring',    'Hi {name}! ⏳ Your Dhulaai Express membership ({plan}) for {reg} expires on {expiry}. Renew today at {price}/month to keep enjoying 6-day waterless care & member washes! 🚗✨');
+  ('tpl_expiring',    'Hi {name}! ⏳ Your Dhulaai Express membership ({plan}) for {reg} expires on {expiry}. Renew today at {price}/month to keep enjoying 6-day waterless care & member washes! 🚗✨'),
+  ('tpl_payment',     'Hi {name}! 💳 Friendly reminder from Dhulaai Express: payment of {price} for your {plan} membership ({reg}) is pending. UPI or cash both work — thank you! 🙏'),
+  ('tpl_info',        'Hi {name}! 🚗 To care for your car ({reg}) every day, we need your parking & address details. Please fill this quick form: {info_url} — Dhulaai Express');
