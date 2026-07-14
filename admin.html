@@ -278,9 +278,30 @@
 <!-- ── Member Details Modal ───────────────────────────────────────────── -->
 <div class="modal-overlay" id="member-edit-modal">
   <div class="modal">
-    <h3>Member Details</h3>
+    <h3>Edit Member &amp; Membership</h3>
     <div id="med-info" class="text-muted text-sm" style="margin-bottom:12px;"></div>
     <div id="med-err" class="err"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Membership Type</label>
+        <select id="med-plan" onchange="updateMedPriceHint()">
+          <option value="1">🚗 Essential Care — 1 wash/month</option>
+          <option value="2">🚗 Signature Care — 2 washes/month</option>
+          <option value="4">🚗 Elite Care — 4 washes/month</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Expiry Date</label>
+        <input id="med-expiry" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Price (₹ / month)</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input id="med-price" type="number" min="0" style="max-width:140px;">
+        <span id="med-price-hint" class="text-muted text-sm"></span>
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Building Name</label>

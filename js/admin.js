@@ -474,7 +474,8 @@ window.renderMembers = function() {
         <td>${badge}</td>
         <td style="white-space:nowrap;">
           ${nearExpiry ? `<button class="btn btn-wa btn-sm" onclick="nudgeMember(${s.id})">📱 Nudge</button>` : ''}
-          <button class="btn btn-ghost btn-sm" title="Edit residence & parking" onclick="editMember(${s.id})">✎</button>
+          <button class="btn btn-wa btn-sm" title="Ask for feedback on WhatsApp" onclick="nudgeFeedback(${s.id})">💬</button>
+          <button class="btn btn-ghost btn-sm" title="Edit member & membership" onclick="editMember(${s.id})">✎</button>
           <button class="btn btn-gold btn-sm" onclick="renewMembership(${s.id})">Renew</button>
           ${status === 'active' ? `<button class="btn btn-red btn-sm" onclick="deactivateSub(${s.id})">Deactivate</button>` : ''}
         </td>
@@ -504,6 +505,11 @@ window.nudgePayment = async function(id) {
   if (s) await sendMemberMessage(s, 'tpl_payment');
 };
 
+window.nudgeFeedback = async function(id) {
+  const s = allSubs.find(x => x.id === id);
+  if (s) await sendMemberMessage(s, 'tpl_feedback');
+};
+
 // ── Member details (residence & parking) ───────────────────────────────
 let editSubId = null;
 
@@ -511,24 +517,41 @@ window.editMember = function(id) {
   const s = allSubs.find(x => x.id === id);
   if (!s) return;
   editSubId = id;
-  document.getElementById('med-info').textContent = `${s.customer_name} · ${s.customer_phone}${s.reg_number ? ' · ' + s.reg_number : ''}`;
+  document.getElementById('med-info').textContent = `${s.customer_name} · ${s.customer_phone}${s.reg_number ? ' · ' + s.reg_number : ''} · ${s.car_type}`;
   document.getElementById('med-err').textContent = '';
+  document.getElementById('med-plan').value = String(s.frequency);
+  document.getElementById('med-expiry').value = s.end_date || '';
+  document.getElementById('med-price').value = s.price;
   document.getElementById('med-building').value = s.building_name || '';
   document.getElementById('med-flat').value = s.flat_number || '';
   document.getElementById('med-parking').value = s.parking_number || '';
+  updateMedPriceHint();
   document.getElementById('member-edit-modal').classList.add('open');
+};
+
+window.updateMedPriceHint = function() {
+  const s = allSubs.find(x => x.id === editSubId);
+  const fr = Number(document.getElementById('med-plan')?.value);
+  const list = s && pricing?.monthly?.[s.car_type]?.[fr]?.foam;
+  document.getElementById('med-price-hint').textContent = list ? `List price: ₹${list.toLocaleString('en-IN')}` : '';
 };
 
 window.closeMemberEditModal = function() { document.getElementById('member-edit-modal').classList.remove('open'); };
 
 window.saveMemberDetails = async function() {
+  const err = document.getElementById('med-err');
+  const priceVal = document.getElementById('med-price').value;
+  if (priceVal === '' || Number(priceVal) < 0) { err.textContent = 'Enter a valid price.'; return; }
   const r = await api(`/api/subscriptions/${editSubId}`, { method: 'PATCH', body: JSON.stringify({ details: {
+    frequency: Number(document.getElementById('med-plan').value),
+    price: Number(priceVal),
+    end_date: document.getElementById('med-expiry').value,
     building_name: document.getElementById('med-building').value.trim(),
     flat_number: document.getElementById('med-flat').value.trim(),
     parking_number: document.getElementById('med-parking').value.trim(),
   } }) });
   if (r.ok) { closeMemberEditModal(); loadSubs(); }
-  else document.getElementById('med-err').textContent = await r.text();
+  else err.textContent = await r.text();
 };
 
 window.requestMemberInfo = async function() {
@@ -955,7 +978,7 @@ window.saveCptTemplate = async function(serviceKey) {
 };
 
 function renderWaTemplates() {
-  const keys = ['tpl_received', 'tpl_inprogress', 'tpl_ready', 'tpl_delivered', 'tpl_expiring', 'tpl_payment', 'tpl_info'];
+  const keys = ['tpl_received', 'tpl_inprogress', 'tpl_ready', 'tpl_delivered', 'tpl_expiring', 'tpl_payment', 'tpl_info', 'tpl_feedback'];
   const labels = {
     tpl_received: 'Car Received',
     tpl_inprogress: 'In Progress',
@@ -964,6 +987,7 @@ function renderWaTemplates() {
     tpl_expiring: 'Membership Expiring (vars: {name} {plan} {reg} {expiry} {price})',
     tpl_payment: 'Payment Reminder (vars: {name} {plan} {reg} {price})',
     tpl_info: 'Ask Member Details (vars: {name} {reg} {info_url})',
+    tpl_feedback: 'Ask for Feedback (vars: {name} {plan} {reg})',
   };
   document.getElementById('wa-templates').innerHTML = keys.map(k => `
     <div class="form-group">

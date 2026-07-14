@@ -28,17 +28,41 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 
-    // Update residence/parking for the member (customer + vehicle of this sub)
+    // Admin edit: residence/parking plus the membership itself (plan, price, expiry)
     if (body.details) {
       if (userRole !== 'admin') return new Response('Unauthorized', { status: 401, headers: CORS });
       const sub = await env.DB.prepare('SELECT * FROM subscriptions WHERE id = ?').bind(id).first();
       if (!sub) return new Response('Not found', { status: 404, headers: CORS });
-      const { building_name, flat_number, parking_number } = body.details;
+      const d = body.details;
+
       await env.DB.prepare('UPDATE customers SET building_name = ?, flat_number = ? WHERE id = ?')
-        .bind(building_name ?? '', flat_number ?? '', sub.customer_id).run();
+        .bind(d.building_name ?? '', d.flat_number ?? '', sub.customer_id).run();
       if (sub.vehicle_id) {
         await env.DB.prepare('UPDATE vehicles SET parking_number = ? WHERE id = ?')
-          .bind(parking_number ?? '', sub.vehicle_id).run();
+          .bind(d.parking_number ?? '', sub.vehicle_id).run();
+      }
+
+      const sets = [], params = [];
+      if (d.frequency !== undefined) {
+        const freq = Number(d.frequency);
+        if (![1, 2, 4].includes(freq)) return new Response('Invalid membership type', { status: 400, headers: CORS });
+        const TIER_NAMES = { 1: 'Essential Care', 2: 'Signature Care', 4: 'Elite Care' };
+        sets.push('frequency = ?', 'washes_total = ?', 'plan_label = ?');
+        params.push(freq, freq, `${TIER_NAMES[freq]} — ${freq}× wash/month — ${sub.car_type}`);
+      }
+      if (d.price !== undefined) {
+        const price = Number(d.price);
+        if (!Number.isFinite(price) || price < 0) return new Response('Invalid price', { status: 400, headers: CORS });
+        sets.push('price = ?'); params.push(price);
+      }
+      if (d.end_date !== undefined) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d.end_date)) return new Response('Invalid expiry date', { status: 400, headers: CORS });
+        sets.push('end_date = ?'); params.push(d.end_date);
+        // Editing the expiry forward should revive an auto-expired membership
+        if (d.end_date >= new Date().toISOString().split('T')[0]) { sets.push('is_active = 1'); }
+      }
+      if (sets.length) {
+        await env.DB.prepare(`UPDATE subscriptions SET ${sets.join(', ')} WHERE id = ?`).bind(...params, id).run();
       }
       return new Response(JSON.stringify({ ok: true }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
     }

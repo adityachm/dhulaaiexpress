@@ -84,4 +84,5 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
   ('tpl_delivered',   'Hi {name}! 🎉 Your {car} ({reg}) has been delivered. Thank you for visiting Dhulaai Express, Dehradun. See you next time!'),
   ('tpl_expiring',    'Hi {name}! ⏳ Your Dhulaai Express membership ({plan}) for {reg} expires on {expiry}. Renew today at {price}/month to keep enjoying 6-day waterless care & member washes! 🚗✨'),
   ('tpl_payment',     'Hi {name}! 💳 Friendly reminder from Dhulaai Express: payment of {price} for your {plan} membership ({reg}) is pending. UPI or cash both work — thank you! 🙏'),
-  ('tpl_info',        'Hi {name}! 🚗 To care for your car ({reg}) every day, we need your parking & address details. Please fill this quick form: {info_url} — Dhulaai Express');
+  ('tpl_info',        'Hi {name}! 🚗 To care for your car ({reg}) every day, we need your parking & address details. Please fill this quick form: {info_url} — Dhulaai Express'),
+  ('tpl_feedback',    'Hi {name}! 🙏 Thank you for being a Dhulaai Express member. How are we doing with your {reg}? Just reply to this message with a rating (1–5 ⭐) and any suggestions — your feedback helps us serve you better!');
