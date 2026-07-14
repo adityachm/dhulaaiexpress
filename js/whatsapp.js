@@ -72,6 +72,24 @@ export async function sendMemberMessage(sub, tplKey, extraVars = {}) {
 
 export function sendExpiryNudge(sub) { return sendMemberMessage(sub, 'tpl_expiring'); }
 
+// Copy the filled template to the clipboard instead of opening WhatsApp —
+// workaround for desktop apps that mangle emoji in wa.me links.
+export async function copyMemberMessage(sub, tplKey, extraVars = {}) {
+  const settings = await loadSettings();
+  const tpl = settings[tplKey] || '';
+  if (!tpl) { alert(`No WhatsApp template set (${tplKey}). Add it in Manage → WhatsApp Templates.`); return false; }
+  const vars = {
+    name: sub.customer_name || '',
+    plan: sub.plan_label || '',
+    reg: sub.reg_number || '',
+    expiry: sub.end_date || '',
+    price: sub.price ? `₹${sub.price.toLocaleString('en-IN')}` : '',
+    ...extraVars,
+  };
+  await navigator.clipboard.writeText(fillTemplate(tpl, vars));
+  return true;
+}
+
 // Open as a proper anchor click to avoid popup blockers
 function openWa(countryPhone, message) {
   const url = `https://wa.me/${countryPhone}?text=${encodeURIComponent(message)}`;

@@ -1,4 +1,4 @@
-import { sendStatus, sendExpiryNudge, sendMemberMessage, setAuthHeaders } from './whatsapp.js';
+import { sendStatus, sendExpiryNudge, sendMemberMessage, copyMemberMessage, setAuthHeaders } from './whatsapp.js';
 
 // ── State ──────────────────────────────────────────────────────────────
 let SECRET = '';
@@ -475,6 +475,7 @@ window.renderMembers = function() {
         <td style="white-space:nowrap;">
           ${nearExpiry ? `<button class="btn btn-wa btn-sm" onclick="nudgeMember(${s.id})">📱 Nudge</button>` : ''}
           <button class="btn btn-wa btn-sm" title="Ask for feedback on WhatsApp" onclick="nudgeFeedback(${s.id})">💬</button>
+          <button class="btn btn-ghost btn-sm" title="Copy feedback message to clipboard" onclick="copyFeedback(${s.id}, this)">📋</button>
           <button class="btn btn-ghost btn-sm" title="Edit member & membership" onclick="editMember(${s.id})">✎</button>
           <button class="btn btn-gold btn-sm" onclick="renewMembership(${s.id})">Renew</button>
           ${status === 'active' ? `<button class="btn btn-red btn-sm" onclick="deactivateSub(${s.id})">Deactivate</button>` : ''}
@@ -508,6 +509,16 @@ window.nudgePayment = async function(id) {
 window.nudgeFeedback = async function(id) {
   const s = allSubs.find(x => x.id === id);
   if (s) await sendMemberMessage(s, 'tpl_feedback');
+};
+
+window.copyFeedback = async function(id, btn) {
+  const s = allSubs.find(x => x.id === id);
+  if (!s) return;
+  if (await copyMemberMessage(s, 'tpl_feedback')) {
+    const old = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = old; }, 1500);
+  }
 };
 
 // ── Member details (residence & parking) ───────────────────────────────
