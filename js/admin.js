@@ -468,6 +468,7 @@ window.renderMembers = function() {
             <span style="font-size:12px;">${s.washes_used}/${s.washes_total}</span>
           </div>
         </td>
+        <td>${(s.start_date || '').slice(0, 10)}</td>
         <td class="${nearExpiry ? 'text-orange' : ''}">${s.end_date}</td>
         <td class="text-gold">₹${s.price.toLocaleString('en-IN')}</td>
         <td>${payment}</td>

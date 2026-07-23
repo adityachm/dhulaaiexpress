@@ -58,8 +58,10 @@ export async function onRequest(context) {
       if (d.end_date !== undefined) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(d.end_date)) return new Response('Invalid expiry date', { status: 400, headers: CORS });
         sets.push('end_date = ?'); params.push(d.end_date);
-        // Editing the expiry forward should revive an auto-expired membership
-        if (d.end_date >= new Date().toISOString().split('T')[0]) { sets.push('is_active = 1'); }
+        // Keep active status in sync with the expiry: a future date revives an
+        // expired membership, a past date expires an active one.
+        sets.push('is_active = ?');
+        params.push(d.end_date >= new Date().toISOString().split('T')[0] ? 1 : 0);
       }
       if (d.start_date !== undefined) {
         if (d.start_date && !/^\d{4}-\d{2}-\d{2}$/.test(d.start_date)) return new Response('Invalid start date', { status: 400, headers: CORS });
