@@ -61,6 +61,19 @@ export async function onRequest(context) {
         // Editing the expiry forward should revive an auto-expired membership
         if (d.end_date >= new Date().toISOString().split('T')[0]) { sets.push('is_active = 1'); }
       }
+      if (d.start_date !== undefined) {
+        if (d.start_date && !/^\d{4}-\d{2}-\d{2}$/.test(d.start_date)) return new Response('Invalid start date', { status: 400, headers: CORS });
+        sets.push('start_date = ?'); params.push(d.start_date || sub.start_date);
+      }
+      if (d.paid_at !== undefined) {
+        // A paid date implies paid; clearing it marks the membership unpaid
+        if (d.paid_at) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d.paid_at)) return new Response('Invalid paid date', { status: 400, headers: CORS });
+          sets.push('paid_at = ?', 'is_paid = 1'); params.push(d.paid_at);
+        } else {
+          sets.push('paid_at = NULL', 'is_paid = 0');
+        }
+      }
       if (sets.length) {
         await env.DB.prepare(`UPDATE subscriptions SET ${sets.join(', ')} WHERE id = ?`).bind(...params, id).run();
       }

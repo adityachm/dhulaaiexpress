@@ -532,6 +532,8 @@ window.editMember = function(id) {
   document.getElementById('med-err').textContent = '';
   document.getElementById('med-plan').value = String(s.frequency);
   document.getElementById('med-expiry').value = s.end_date || '';
+  document.getElementById('med-start').value = (s.start_date || '').slice(0, 10);
+  document.getElementById('med-paid').value = (s.paid_at || '').slice(0, 10);
   document.getElementById('med-price').value = s.price;
   document.getElementById('med-building').value = s.building_name || '';
   document.getElementById('med-flat').value = s.flat_number || '';
@@ -557,6 +559,8 @@ window.saveMemberDetails = async function() {
     frequency: Number(document.getElementById('med-plan').value),
     price: Number(priceVal),
     end_date: document.getElementById('med-expiry').value,
+    start_date: document.getElementById('med-start').value,
+    paid_at: document.getElementById('med-paid').value,
     building_name: document.getElementById('med-building').value.trim(),
     flat_number: document.getElementById('med-flat').value.trim(),
     parking_number: document.getElementById('med-parking').value.trim(),
