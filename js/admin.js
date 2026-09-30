@@ -1,4 +1,4 @@
-import { sendStatus, sendExpiryNudge, sendMemberMessage, copyMemberMessage, setAuthHeaders } from './whatsapp.js';
+import { sendStatus, sendExpiryNudge, sendMemberMessage, copyMemberMessage, setAuthHeaders } from './whatsapp.js?v=20260930';
 
 // ── State ──────────────────────────────────────────────────────────────
 let SECRET = '';

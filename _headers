@@ -1,0 +1,9 @@
+# Cloudflare Pages response headers.
+# Always re-check JS/CSS with the server (cheap: unchanged files return
+# 304 via ETag). Without this, phones reuse stale scripts for hours and
+# an old script can run against a new page — which left the worker
+# "New car" screen blank after the redesign.
+/js/*
+  Cache-Control: public, max-age=0, must-revalidate
+/css/*
+  Cache-Control: public, max-age=0, must-revalidate

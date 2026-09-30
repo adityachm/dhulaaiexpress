@@ -24,8 +24,9 @@ export async function onRequest(context) {
     // Vehicle lookup by reg number — returns vehicle + its registered owner name
     if (reg) {
       const vehicle = await env.DB.prepare(
-        'SELECT v.*, c.name as owner_name FROM vehicles v JOIN customers c ON v.customer_id = c.id WHERE v.reg_number = ? LIMIT 1'
-      ).bind(reg.trim().toUpperCase()).first();
+        // Match ignoring spaces/dashes — older entries were saved as "UK07 AB 1234"
+        "SELECT v.*, c.name as owner_name, c.phone as owner_phone FROM vehicles v JOIN customers c ON v.customer_id = c.id WHERE REPLACE(REPLACE(UPPER(v.reg_number), ' ', ''), '-', '') = ? LIMIT 1"
+      ).bind(reg.toUpperCase().replace(/[^A-Z0-9]/g, '')).first();
       return new Response(JSON.stringify(vehicle || null), { headers: { ...CORS, 'Content-Type': 'application/json' } });
     }
 

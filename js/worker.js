@@ -1,4 +1,4 @@
-import { setAuthHeaders, loadSettings, fillTemplate, waLink } from './whatsapp.js';
+import { setAuthHeaders, loadSettings, fillTemplate, waLink } from './whatsapp.js?v=20260930';
 
 // Worker panel — designed for staff who read little English:
 // one question per screen, pictures everywhere, big buttons, plain words.
@@ -36,10 +36,14 @@ const CAR_TYPE_INFO = {
 const carTypeInfo = ct => CAR_TYPE_INFO[ct] || { icon: '🚗', eg: '' };
 
 const COLORS = [
-  { name: 'White',  hex: '#f8fafc' }, { name: 'Silver', hex: '#c0c4cc' },
-  { name: 'Grey',   hex: '#6b7280' }, { name: 'Black',  hex: '#111111' },
-  { name: 'Red',    hex: '#dc2626' }, { name: 'Blue',   hex: '#2563eb' },
-  { name: 'Brown',  hex: '#7c4a2d' }, { name: 'Other',  hex: 'conic-gradient(#f43f5e,#f59e0b,#22c55e,#3b82f6,#a855f7,#f43f5e)' },
+  { name: 'White',      hex: '#f8fafc' }, { name: 'Pearl White', hex: '#efe9dc' },
+  { name: 'Silver',     hex: '#c0c4cc' }, { name: 'Grey',        hex: '#6b7280' },
+  { name: 'Black',      hex: '#111111' }, { name: 'Red',         hex: '#dc2626' },
+  { name: 'Maroon',     hex: '#7f1d1d' }, { name: 'Orange',      hex: '#ea580c' },
+  { name: 'Yellow',     hex: '#facc15' }, { name: 'Gold',        hex: '#b8913a' },
+  { name: 'Beige',      hex: '#d6c4a1' }, { name: 'Brown',       hex: '#7c4a2d' },
+  { name: 'Green',      hex: '#15803d' }, { name: 'Blue',        hex: '#2563eb' },
+  { name: 'Dark Blue',  hex: '#1e3a8a' }, { name: 'Other',       hex: 'conic-gradient(#f43f5e,#f59e0b,#22c55e,#3b82f6,#a855f7,#f43f5e)' },
 ];
 const colorHex = name => COLORS.find(c => c.name.toLowerCase() === String(name || '').trim().toLowerCase())?.hex;
 
@@ -113,6 +117,8 @@ window.switchTab = function(tab) {
   document.querySelectorAll('.wk-page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.wk-bottom button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   $(`tab-${tab}`).classList.add('active');
+  // Safety net: never leave the New car screen empty
+  if (tab === 'new-car' && !document.querySelector('.wk-step.active')) resetWizard();
   window.scrollTo(0, 0);
   if (tab === 'board') loadBoard();
 };
@@ -323,11 +329,17 @@ function toast(msg, undo) {
   const t = $('toast'), btn = $('toast-undo');
   $('toast-msg').textContent = msg;
   btn.classList.toggle('hidden', !undo);
-  btn.onclick = () => { t.classList.add('hidden'); undo(); };
+  btn.onclick = () => { hideToast(); undo(); };
   t.classList.remove('hidden');
+  document.body.classList.add('toast-open');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add('hidden'), undo ? 7000 : 3000);
+  toastTimer = setTimeout(hideToast, undo ? 8000 : 3500);
 }
+window.hideToast = function() {
+  clearTimeout(toastTimer);
+  $('toast').classList.add('hidden');
+  document.body.classList.remove('toast-open');
+};
 
 function confirmSheet(html, yesLabel, onYes) {
   $('sheet-body').innerHTML = html;
@@ -343,14 +355,18 @@ window.closeSheet = () => $('sheet').classList.add('hidden');
 // ══════════════════════════════════════════════════════════════════════
 let draft;
 let history = [];
-const STEP_DOT = { phone: 'phone', name: 'car', pick: 'car', car: 'car', service: 'service', review: 'review', done: 'review' };
-const DOT_ORDER = ['phone', 'car', 'service', 'review'];
+// Order: 🚗 car number & details → 📱 phone (→ 👤 name if new) → 🧽 wash → ✅ save
+const STEP_DOT = { car: 'car', phone: 'phone', name: 'phone', service: 'service', review: 'review', done: 'review' };
+const DOT_ORDER = ['car', 'phone', 'service', 'review'];
+const normReg = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 function newDraft() {
   return {
-    phone: '', customer: null, name: '', vehicles: [], subs: [],
-    vehicle: null,                     // an existing vehicle, or null for a new one
     reg: '', carType: '', color: '', model: '',
+    known: null,                       // car found by its number (with owner name/phone)
+    foundCustomer: null, editingKnown: false,
+    phone: '', customer: null, name: '', vehicles: [], subs: [],
+    vehicle: null,                     // this car in the customer's saved cars, if any
     service: '',                       // 'member' | 'top' | 'normal' | 'foam'
     addons: new Set(), pickup: false, address: '',
     pay: 'cash', notes: '',
@@ -362,8 +378,10 @@ window.resetWizard = function() {
   history = [];
   ['w-phone', 'w-name', 'w-reg', 'w-model', 'w-address', 'w-notes'].forEach(id => { $(id).value = ''; });
   document.querySelectorAll('#tab-new-car .wk-err').forEach(e => { e.textContent = ''; });
+  showFound(false);
   updatePhoneCounter();
-  show('phone');
+  renderCarStep();
+  show('car');
 };
 
 function show(step) {
@@ -375,14 +393,15 @@ function show(step) {
   bars.forEach((b, i) => b.classList.toggle('done', i < dot || step === 'done'));
   $('wiz-steps').classList.toggle('hidden', step === 'done');
   window.scrollTo(0, 0);
-  const first = document.querySelector(`.wk-step[data-step="${step}"] input`);
-  if (first && !first.value && step !== 'car' && step !== 'service' && step !== 'review') setTimeout(() => first.focus(), 50);
+  // Put the cursor in the box that needs typing
+  const focusId = { car: 'w-reg', phone: 'w-phone', name: 'w-name' }[step];
+  if (focusId && !$(focusId).value) setTimeout(() => $(focusId).focus(), 50);
 }
 
 function go(step) {
   const current = document.querySelector('.wk-step.active')?.dataset.step;
   if (current) history.push(current);
-  if (step === 'car') renderCarStep();
+  if (step === 'phone') renderPhoneStep();
   if (step === 'service') renderServiceStep();
   if (step === 'review') renderReview();
   show(step);
@@ -393,7 +412,165 @@ window.goBack = function() {
   if (prev) show(prev);
 };
 
-// ── Step: phone ────────────────────────────────────────────────────────
+// ── Step 1: car number & details ───────────────────────────────────────
+function renderCarStep() {
+  $('err-reg').textContent = ''; $('err-type').textContent = '';
+
+  $('w-types').innerHTML = (pricing?.car_types || []).map(ct => {
+    const info = carTypeInfo(ct);
+    return `<button class="wk-tile ${draft.carType === ct ? 'selected' : ''}" onclick="pickType('${esc(ct).replace(/'/g, '&#39;')}')" data-type="${esc(ct)}">
+      <span class="wk-tile-icon">${info.icon}</span><b>${esc(ct)}</b>${info.eg ? `<small>${esc(info.eg)}</small>` : ''}
+    </button>`;
+  }).join('');
+
+  $('w-colors').innerHTML = COLORS.map(c => `
+    <button class="wk-swatch" data-color="${c.name}" onclick="pickColor('${c.name}')">
+      <span class="wk-dot" style="background:${c.hex}"></span>${c.name}
+    </button>`).join('');
+  markColor();
+}
+
+window.pickType = function(ct) {
+  draft.carType = ct;
+  $('err-type').textContent = '';
+  document.querySelectorAll('#w-types .wk-tile').forEach(t => t.classList.toggle('selected', t.dataset.type === ct));
+};
+
+function markColor() {
+  const c = draft.color.toLowerCase();
+  document.querySelectorAll('#w-colors .wk-swatch').forEach(s => s.classList.toggle('selected', s.dataset.color.toLowerCase() === c));
+}
+window.pickColor = function(name) {
+  draft.color = draft.color === name ? '' : name;
+  markColor();
+};
+
+// ── Saved car? Pull its details and skip the questions ─────────────────
+function showFound(on) {
+  $('w-found').classList.toggle('hidden', !on);
+  $('w-car-details').classList.toggle('hidden', on);
+  $('err-found').textContent = '';
+}
+
+let regTimer;
+$('w-reg').addEventListener('input', () => {
+  $('err-reg').textContent = '';
+  const reg = normReg($('w-reg').value);
+  // Typed a different number → forget the car we found
+  if (draft.known && reg !== normReg(draft.known.reg_number)) {
+    draft.known = null; draft.foundCustomer = null; draft.editingKnown = false;
+    showFound(false);
+  }
+  // Look it up as soon as the number looks complete — no extra tap needed
+  clearTimeout(regTimer);
+  if (reg.length >= 8) regTimer = setTimeout(lookupReg, 450);
+});
+$('w-reg').addEventListener('blur', lookupReg);
+$('w-reg').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+
+async function lookupReg() {
+  clearTimeout(regTimer);
+  const reg = normReg($('w-reg').value);
+  if (reg.length < 4 || (draft.known && normReg(draft.known.reg_number) === reg)) return;
+  let v = null;
+  try {
+    const r = await api(`/api/customers?reg=${encodeURIComponent(reg)}`);
+    v = r.ok ? await r.json() : null;
+  } catch { return; }
+  if (!v || normReg($('w-reg').value) !== reg) return;   // not saved, or number changed meanwhile
+
+  // Owner + membership, so the card can say "⭐ Member"
+  let cust = null;
+  if (v.owner_phone) {
+    try {
+      const r = await api(`/api/customers?phone=${encodeURIComponent(v.owner_phone)}`);
+      cust = r.ok ? await r.json() : null;
+    } catch {}
+  }
+  draft.known = v;
+  draft.foundCustomer = cust;
+  draft.editingKnown = false;
+
+  const veh = cust?.vehicles?.find(x => x.id === v.id) || v;
+  const m = cust ? (cust.active_subscriptions || []).find(sb =>
+    (sb.vehicle_id === veh.id || sb.vehicle_id == null) && sb.washes_total - sb.washes_used > 0) : null;
+  const left = m ? m.washes_total - m.washes_used : 0;
+  $('w-found-body').innerHTML = `
+    ${plate(v.reg_number)}
+    ${carLine(v)}
+    ${v.owner_name ? `<div class="wk-found-row">👤 ${esc(v.owner_name)}</div>` : ''}
+    ${v.owner_phone ? `<div class="wk-found-row">📞 ${esc(v.owner_phone)}</div>` : ''}
+    ${m ? `<div class="wk-found-row"><span class="wk-chip member">⭐ Member · ${left} free wash${left === 1 ? '' : 'es'} left</span></div>` : ''}`;
+  showFound(true);
+  $('w-reg').blur();
+}
+
+// "Yes, this car" → use everything we have and go straight to the wash
+window.useFoundCar = async function() {
+  const v = draft.known;
+  if (!v) return;
+  Object.assign(draft, {
+    reg: normReg(v.reg_number), carType: v.car_type, color: v.color || '', model: v.make_model || '',
+  });
+  if (!v.owner_phone) { go('phone'); return; }
+  $('w-phone').value = v.owner_phone; updatePhoneCounter();
+  draft.phone = v.owner_phone;
+  let data = draft.foundCustomer;
+  if (!data) {
+    try {
+      const r = await api(`/api/customers?phone=${encodeURIComponent(v.owner_phone)}`);
+      data = r.ok ? await r.json() : null;
+    } catch { $('err-found').textContent = 'No internet. Try again.'; return; }
+  }
+  if (!data?.customer) { go('phone'); return; }
+  applyCustomer(data);
+  go('service');
+};
+
+// "Change car details" → show the questions, already filled in
+window.editFoundCar = function() {
+  const v = draft.known;
+  draft.editingKnown = true;
+  if (v) {
+    if (v.car_type) draft.carType = v.car_type;
+    draft.color = v.color || '';
+    $('w-model').value = v.make_model || '';
+  }
+  renderCarStep();
+  showFound(false);
+};
+
+window.stepCarNext = async function() {
+  const reg = normReg($('w-reg').value);
+  // Tapped Next straight from the number box: check if it's a saved car first
+  if (reg.length >= 4 && !draft.known) {
+    await lookupReg();
+    if (draft.known) return;   // "Car found" card is showing — one tap to continue
+  }
+  let bad = false;
+  if (reg.length < 4) { $('err-reg').textContent = 'Type the car number from the number plate'; bad = true; }
+  if (!draft.carType) { $('err-type').textContent = 'Tap the car size'; bad = true; }
+  if (bad) { $(reg.length < 4 ? 'err-reg' : 'err-type').scrollIntoView({ block: 'center' }); return; }
+  draft.reg = reg;
+  draft.model = $('w-model').value.trim();
+  // Saved car being changed → its owner's number is ready; the worker just checks it
+  if (draft.known?.owner_phone && !$('w-phone').value) {
+    $('w-phone').value = draft.known.owner_phone;
+    updatePhoneCounter();
+  }
+  go('phone');
+};
+
+// ── Step 2: phone ──────────────────────────────────────────────────────
+function renderPhoneStep() {
+  const hex = colorHex(draft.color);
+  $('w-car-summary-top').innerHTML = `${plate(draft.reg)}<span>${hex ? `<span class="wk-dot" style="display:inline-block;vertical-align:middle;background:${hex}"></span> ` : ''}${carTypeInfo(draft.carType).icon} ${esc([draft.color, draft.model].filter(Boolean).join(' ') || draft.carType)}</span>`;
+  $('w-phone-help').textContent = draft.known?.owner_phone && phoneDigits() === draft.known.owner_phone
+    ? 'This is the owner’s saved number. Change it if someone else brought the car.'
+    : 'Ask the customer for their mobile number.';
+  $('err-phone').textContent = '';
+}
+
 function phoneDigits() {
   let d = $('w-phone').value.replace(/\D/g, '');
   if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
@@ -425,125 +602,48 @@ window.stepPhoneNext = async function() {
   err.textContent = '';
 
   if (data && data.customer) {
-    draft.customer = data.customer;
-    draft.name = data.customer.name;
-    draft.vehicles = data.vehicles || [];
-    draft.subs = data.active_subscriptions || [];
-    if (draft.vehicles.length) { renderCarPicks(); go('pick'); }
-    else startNewCar();
+    applyCustomer(data);
+    go('service');
   } else {
-    draft.customer = null; draft.vehicles = []; draft.subs = [];
+    Object.assign(draft, { customer: null, vehicles: [], subs: [], vehicle: null });
+    fitServiceToMembership();
     go('name');
   }
 };
 
-// ── Step: name ─────────────────────────────────────────────────────────
+function applyCustomer(data) {
+  draft.customer = data.customer;
+  draft.name = data.customer.name;
+  draft.vehicles = data.vehicles || [];
+  draft.subs = data.active_subscriptions || [];
+  // Is this car one of this customer's saved cars? (membership is per car)
+  draft.vehicle = draft.vehicles.find(v => normReg(v.reg_number) === draft.reg) || null;
+  fitServiceToMembership();
+}
+
+// Keep the wash already chosen (e.g. after going Back); only drop a member
+// wash this customer/car isn't entitled to, and pre-pick it when they are.
+function fitServiceToMembership() {
+  const member = !!memberFor(draft.vehicle);
+  if (draft.service === 'member' && !member) draft.service = '';
+  if (!draft.service && member) draft.service = 'member';
+}
+
+// ── Step 2b: name (new customers only) ─────────────────────────────────
 $('w-name').addEventListener('keydown', e => { if (e.key === 'Enter') stepNameNext(); });
 window.stepNameNext = function() {
   const name = $('w-name').value.trim();
   if (name.length < 2) { $('err-name').textContent = 'Type the customer name'; return; }
   $('err-name').textContent = '';
   draft.name = name;
-  startNewCar();
+  go('service');
 };
 
-// ── Step: pick an existing car ─────────────────────────────────────────
 function memberFor(vehicle) {
   if (!vehicle) return null;
   return draft.subs.find(s =>
     (s.vehicle_id === vehicle.id || s.vehicle_id == null) && s.washes_total - s.washes_used > 0) || null;
 }
-
-function renderCarPicks() {
-  $('w-hello').textContent = draft.name;
-  $('w-car-picks').innerHTML = draft.vehicles.map((v, i) => {
-    const m = memberFor(v);
-    const left = m ? m.washes_total - m.washes_used : 0;
-    return `<button class="wk-tile" onclick="pickCar(${i})" style="flex-direction:column;align-items:flex-start;">
-      ${plate(v.reg_number)}
-      ${carLine(v)}
-      ${m ? `<span class="wk-chip member" style="margin-top:8px;">⭐ Member · ${left} free wash${left === 1 ? '' : 'es'} left</span>` : ''}
-    </button>`;
-  }).join('');
-}
-
-window.pickCar = function(i) {
-  const v = draft.vehicles[i];
-  Object.assign(draft, { vehicle: v, reg: v.reg_number, carType: v.car_type, color: v.color || '', model: v.make_model || '' });
-  draft.service = memberFor(v) ? 'member' : '';
-  go('service');
-};
-
-window.startNewCar = function() {
-  Object.assign(draft, { vehicle: null, reg: '', carType: '', color: '', model: '', service: '' });
-  $('w-reg').value = ''; $('w-model').value = '';
-  go('car');
-};
-
-// ── Step: new car details ──────────────────────────────────────────────
-function renderCarStep() {
-  $('w-reg').value = draft.reg;
-  $('w-model').value = draft.model;
-  $('err-reg').textContent = ''; $('err-type').textContent = '';
-
-  $('w-types').innerHTML = (pricing?.car_types || []).map(ct => {
-    const info = carTypeInfo(ct);
-    return `<button class="wk-tile ${draft.carType === ct ? 'selected' : ''}" onclick="pickType('${esc(ct).replace(/'/g, '&#39;')}')" data-type="${esc(ct)}">
-      <span class="wk-tile-icon">${info.icon}</span><b>${esc(ct)}</b>${info.eg ? `<small>${esc(info.eg)}</small>` : ''}
-    </button>`;
-  }).join('');
-
-  $('w-colors').innerHTML = COLORS.map(c => `
-    <button class="wk-swatch ${draft.color.toLowerCase() === c.name.toLowerCase() ? 'selected' : ''}" onclick="pickColor('${c.name}')">
-      <span class="wk-dot" style="background:${c.hex}"></span>${c.name}
-    </button>`).join('');
-}
-
-window.pickType = function(ct) {
-  draft.carType = ct;
-  $('err-type').textContent = '';
-  document.querySelectorAll('#w-types .wk-tile').forEach(t => t.classList.toggle('selected', t.dataset.type === ct));
-};
-
-window.pickColor = function(name) {
-  draft.color = draft.color === name ? '' : name;
-  document.querySelectorAll('#w-colors .wk-swatch').forEach(s => s.classList.toggle('selected', s.textContent.trim() === draft.color));
-};
-
-// Known car number? Fill in its size/colour/name automatically.
-$('w-reg').addEventListener('input', () => { $('err-reg').textContent = ''; });
-$('w-reg').addEventListener('blur', async () => {
-  const reg = normReg($('w-reg').value);
-  if (reg.length < 4) return;
-  try {
-    const r = await api(`/api/customers?reg=${encodeURIComponent(reg)}`);
-    const v = r.ok ? await r.json() : null;
-    if (!v) return;
-    if (v.car_type) pickType(v.car_type);
-    if (v.color && !draft.color) {
-      draft.color = v.color;
-      document.querySelectorAll('#w-colors .wk-swatch').forEach(s => s.classList.toggle('selected', s.textContent.trim().toLowerCase() === v.color.toLowerCase()));
-    }
-    if (v.make_model && !$('w-model').value) $('w-model').value = v.make_model;
-  } catch {}
-});
-
-const normReg = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-window.stepCarNext = function() {
-  const reg = normReg($('w-reg').value);
-  let bad = false;
-  if (reg.length < 4) { $('err-reg').textContent = 'Type the car number from the number plate'; bad = true; }
-  if (!draft.carType) { $('err-type').textContent = 'Tap the car size'; bad = true; }
-  if (bad) return;
-  // Maybe this "new" car is one of the customer's saved cars
-  const known = draft.vehicles.find(v => normReg(v.reg_number) === reg);
-  draft.vehicle = known || null;
-  draft.reg = reg;
-  draft.model = $('w-model').value.trim();
-  draft.service = memberFor(draft.vehicle) ? 'member' : '';
-  go('service');
-};
 
 // ── Step: service ──────────────────────────────────────────────────────
 function addonPrice(a) {

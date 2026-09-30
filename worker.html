@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0e1a">
   <title>Dhulaai Express — Worker</title>
-  <link rel="stylesheet" href="/css/panel.css">
-  <link rel="stylesheet" href="/css/worker.css">
+  <link rel="stylesheet" href="/css/panel.css?v=20260930">
+  <link rel="stylesheet" href="/css/worker.css?v=20260930">
 </head>
 <body class="wk">
 
@@ -50,23 +50,66 @@
   <main id="tab-new-car" class="wk-page">
 
     <div class="wk-steps" id="wiz-steps">
-      <span data-step="phone">📱</span><i></i>
       <span data-step="car">🚗</span><i></i>
+      <span data-step="phone">📱</span><i></i>
       <span data-step="service">🧽</span><i></i>
       <span data-step="review">✅</span>
     </div>
 
-    <!-- STEP: phone -->
+    <!-- STEP 1: car number & details -->
+    <section class="wk-step" data-step="car">
+      <h2 class="wk-q">🚗 Car number</h2>
+      <p class="wk-help">Look at the number plate and type it.</p>
+      <div class="wk-plate-input">
+        <input id="w-reg" type="text" placeholder="UK07 AB 1234" autocomplete="off" autocapitalize="characters">
+      </div>
+      <div class="wk-err" id="err-reg"></div>
+
+      <!-- Car already saved: show it and go straight on -->
+      <div id="w-found" class="hidden">
+        <div class="wk-found">
+          <div class="wk-found-title">✓ Car found</div>
+          <div id="w-found-body"></div>
+        </div>
+        <div class="wk-err" id="err-found"></div>
+        <button class="wk-big-btn wk-green" onclick="useFoundCar()">✅ Yes, this car — continue ➜</button>
+        <button class="wk-big-btn wk-ghost" onclick="editFoundCar()">✏️ Change car details</button>
+      </div>
+
+      <!-- New car (or changing a saved one): ask the details -->
+      <div id="w-car-details">
+        <h2 class="wk-q">📏 Car size</h2>
+        <div id="w-types" class="wk-grid"></div>
+        <div class="wk-err" id="err-type"></div>
+
+        <h2 class="wk-q">🎨 Car colour</h2>
+        <div id="w-colors" class="wk-swatches"></div>
+
+        <h2 class="wk-q wk-q-sm">Car name <span class="wk-opt">(if you know)</span></h2>
+        <input id="w-model" class="wk-input" type="text" placeholder="Swift, Creta, City…" autocomplete="off">
+
+        <div class="wk-nav">
+          <button class="wk-big-btn wk-gold" onclick="stepCarNext()">Next ➜</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 2: phone -->
     <section class="wk-step" data-step="phone">
+      <div id="w-car-summary-top" class="wk-mini-car"></div>
       <h2 class="wk-q">📱 Customer phone number</h2>
+      <p class="wk-help" id="w-phone-help">Ask the customer for their mobile number.</p>
       <input id="w-phone" class="wk-input wk-input-xl" type="tel" inputmode="numeric" maxlength="10"
         placeholder="98765 43210" autocomplete="off">
       <div class="wk-counter" id="w-phone-count">0 of 10 digits</div>
       <div class="wk-err" id="err-phone"></div>
-      <button class="wk-big-btn wk-gold" onclick="stepPhoneNext()">Next ➜</button>
+      <div class="wk-nav">
+        <button class="wk-back" onclick="goBack()">⬅ Back</button>
+        <button class="wk-big-btn wk-gold" onclick="stepPhoneNext()">Next ➜</button>
+      </div>
     </section>
 
-    <!-- STEP: customer name (new customers only) -->
+    <!-- STEP 2b: customer name (new customers only) -->
     <section class="wk-step" data-step="name">
       <h2 class="wk-q">👤 Customer name</h2>
       <p class="wk-help">New customer. Ask their name.</p>
@@ -78,40 +121,6 @@
       </div>
     </section>
 
-    <!-- STEP: pick one of the customer's cars -->
-    <section class="wk-step" data-step="pick">
-      <h2 class="wk-q">👋 <span id="w-hello"></span></h2>
-      <p class="wk-help">Which car came today? Tap it.</p>
-      <div id="w-car-picks" class="wk-card-list"></div>
-      <button class="wk-tile wk-tile-add" onclick="startNewCar()">➕ A different car</button>
-      <div class="wk-nav">
-        <button class="wk-back" onclick="goBack()">⬅ Back</button>
-      </div>
-    </section>
-
-    <!-- STEP: new car details -->
-    <section class="wk-step" data-step="car">
-      <h2 class="wk-q">🚗 Car number</h2>
-      <div class="wk-plate-input">
-        <input id="w-reg" type="text" placeholder="UK07 AB 1234" autocomplete="off" autocapitalize="characters">
-      </div>
-      <div class="wk-err" id="err-reg"></div>
-
-      <h2 class="wk-q">📏 Car size</h2>
-      <div id="w-types" class="wk-grid"></div>
-      <div class="wk-err" id="err-type"></div>
-
-      <h2 class="wk-q">🎨 Car colour</h2>
-      <div id="w-colors" class="wk-swatches"></div>
-
-      <h2 class="wk-q wk-q-sm">Car name <span class="wk-opt">(if you know)</span></h2>
-      <input id="w-model" class="wk-input" type="text" placeholder="Swift, Creta, City…" autocomplete="off">
-
-      <div class="wk-nav">
-        <button class="wk-back" onclick="goBack()">⬅ Back</button>
-        <button class="wk-big-btn wk-gold" onclick="stepCarNext()">Next ➜</button>
-      </div>
-    </section>
 
     <!-- STEP: service -->
     <section class="wk-step" data-step="service">
@@ -186,6 +195,7 @@
   <div id="toast" class="wk-toast hidden" role="status">
     <span id="toast-msg"></span>
     <button id="toast-undo" class="hidden">↩ Undo</button>
+    <button id="toast-close" class="wk-toast-close" aria-label="Close" onclick="hideToast()">✕</button>
   </div>
 
   <!-- Confirm sheet -->
@@ -198,6 +208,6 @@
   </div>
 </div>
 
-<script type="module" src="/js/worker.js"></script>
+<script type="module" src="/js/worker.js?v=20260930"></script>
 </body>
 </html>

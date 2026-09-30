@@ -110,7 +110,9 @@ export async function onRequest(context) {
     }
 
     // Look up vehicle by reg number globally — same car could be brought by different people
-    let vehicle = await env.DB.prepare('SELECT * FROM vehicles WHERE reg_number = ?').bind(reg_number.trim().toUpperCase()).first();
+    // Match ignoring spaces/dashes — older entries were saved as "UK07 AB 1234"
+    let vehicle = await env.DB.prepare("SELECT * FROM vehicles WHERE REPLACE(REPLACE(UPPER(reg_number), ' ', ''), '-', '') = ?")
+      .bind(reg_number.toUpperCase().replace(/[^A-Z0-9]/g, '')).first();
     if (!vehicle) {
       // New vehicle — register under the current customer
       const { meta } = await env.DB.prepare(
