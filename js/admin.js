@@ -525,47 +525,86 @@ window.copyFeedback = async function(id, btn) {
 // ── Member details (residence & parking) ───────────────────────────────
 let editSubId = null;
 
-window.editMember = function(id) {
+window.editMember = async function(id) {
   const s = allSubs.find(x => x.id === id);
   if (!s) return;
   editSubId = id;
-  document.getElementById('med-info').textContent = `${s.customer_name} · ${s.customer_phone}${s.reg_number ? ' · ' + s.reg_number : ''} · ${s.car_type}`;
-  document.getElementById('med-err').textContent = '';
-  document.getElementById('med-plan').value = String(s.frequency);
-  document.getElementById('med-expiry').value = s.end_date || '';
-  document.getElementById('med-start').value = (s.start_date || '').slice(0, 10);
-  document.getElementById('med-paid').value = (s.paid_at || '').slice(0, 10);
-  document.getElementById('med-price').value = s.price;
-  document.getElementById('med-building').value = s.building_name || '';
-  document.getElementById('med-flat').value = s.flat_number || '';
-  document.getElementById('med-parking').value = s.parking_number || '';
+  if (!pricing) await loadPricing();
+  const $ = k => document.getElementById(k);
+
+  const ctSel = $('med-car-type');
+  if (!ctSel.options.length && pricing) {
+    ctSel.innerHTML = pricing.car_types.map(ct => `<option value="${ct}">${ct}</option>`).join('');
+  }
+
+  $('med-info').textContent = `Membership #${s.id}`;
+  $('med-err').textContent = '';
+  // Member
+  $('med-name').value = s.customer_name || '';
+  $('med-phone').value = s.customer_phone || '';
+  $('med-building').value = s.building_name || '';
+  $('med-flat').value = s.flat_number || '';
+  // Vehicle (legacy memberships have none — lock those fields)
+  const hasVehicle = !!s.vehicle_id;
+  $('med-reg').value = s.reg_number || '';
+  $('med-model').value = s.make_model || '';
+  $('med-color').value = s.color || '';
+  $('med-parking').value = s.parking_number || '';
+  ['med-reg', 'med-model', 'med-color', 'med-parking'].forEach(k => { $(k).disabled = !hasVehicle; });
+  ctSel.value = s.car_type;
+  // Membership
+  $('med-plan').value = String(s.frequency);
+  $('med-price').value = s.price;
+  $('med-start').value = (s.start_date || '').slice(0, 10);
+  $('med-expiry').value = s.end_date || '';
+  $('med-paid').value = (s.paid_at || '').slice(0, 10);
+  $('med-used').value = s.washes_used;
+
   updateMedPriceHint();
-  document.getElementById('member-edit-modal').classList.add('open');
+  $('member-edit-modal').classList.add('open');
 };
 
 window.updateMedPriceHint = function() {
-  const s = allSubs.find(x => x.id === editSubId);
+  const ct = document.getElementById('med-car-type')?.value;
   const fr = Number(document.getElementById('med-plan')?.value);
-  const list = s && pricing?.monthly?.[s.car_type]?.[fr]?.foam;
+  const list = ct && pricing?.monthly?.[ct]?.[fr]?.foam;
   document.getElementById('med-price-hint').textContent = list ? `List price: ₹${list.toLocaleString('en-IN')}` : '';
+  document.getElementById('med-used-total').textContent = fr ? `of ${fr}` : '';
 };
 
 window.closeMemberEditModal = function() { document.getElementById('member-edit-modal').classList.remove('open'); };
 
 window.saveMemberDetails = async function() {
-  const err = document.getElementById('med-err');
-  const priceVal = document.getElementById('med-price').value;
+  const $ = k => document.getElementById(k);
+  const err = $('med-err');
+  const priceVal = $('med-price').value;
+  if (!$('med-name').value.trim()) { err.textContent = 'Enter the member name.'; return; }
   if (priceVal === '' || Number(priceVal) < 0) { err.textContent = 'Enter a valid price.'; return; }
-  const r = await api(`/api/subscriptions/${editSubId}`, { method: 'PATCH', body: JSON.stringify({ details: {
-    frequency: Number(document.getElementById('med-plan').value),
+
+  const s = allSubs.find(x => x.id === editSubId);
+  const details = {
+    name: $('med-name').value.trim(),
+    phone: $('med-phone').value.trim(),
+    building_name: $('med-building').value.trim(),
+    flat_number: $('med-flat').value.trim(),
+    car_type: $('med-car-type').value,
+    frequency: Number($('med-plan').value),
     price: Number(priceVal),
-    end_date: document.getElementById('med-expiry').value,
-    start_date: document.getElementById('med-start').value,
-    paid_at: document.getElementById('med-paid').value,
-    building_name: document.getElementById('med-building').value.trim(),
-    flat_number: document.getElementById('med-flat').value.trim(),
-    parking_number: document.getElementById('med-parking').value.trim(),
-  } }) });
+    start_date: $('med-start').value,
+    end_date: $('med-expiry').value,
+    paid_at: $('med-paid').value,
+    washes_used: Number($('med-used').value),
+  };
+  if (s?.vehicle_id) {
+    Object.assign(details, {
+      reg_number: $('med-reg').value.trim().toUpperCase(),
+      make_model: $('med-model').value.trim(),
+      color: $('med-color').value.trim(),
+      parking_number: $('med-parking').value.trim(),
+    });
+  }
+
+  const r = await api(`/api/subscriptions/${editSubId}`, { method: 'PATCH', body: JSON.stringify({ details }) });
   if (r.ok) { closeMemberEditModal(); loadSubs(); }
   else err.textContent = await r.text();
 };

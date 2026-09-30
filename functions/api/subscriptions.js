@@ -37,7 +37,7 @@ export async function onRequest(context) {
     let query = `
       SELECT s.*, c.name as customer_name, c.phone as customer_phone,
              c.building_name, c.flat_number,
-             v.reg_number, v.make_model, v.parking_number
+             v.reg_number, v.make_model, v.color, v.parking_number
       FROM subscriptions s
       JOIN customers c ON s.customer_id = c.id
       LEFT JOIN vehicles v ON s.vehicle_id = v.id

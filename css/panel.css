@@ -319,3 +319,11 @@ tr:hover td { background: var(--bg3); }
 .text-orange { color: var(--orange); }
 .empty-state { text-align: center; padding: 40px; color: var(--text3); }
 .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+/* Section headings inside the member edit modal */
+.med-section {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--gold); margin: 18px 0 10px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.med-section:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+#member-edit-modal .modal { max-height: 90vh; overflow-y: auto; }
