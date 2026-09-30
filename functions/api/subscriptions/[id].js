@@ -1,3 +1,5 @@
+import { getCarTypes } from '../../_lib/car-types.js';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'PATCH, DELETE, OPTIONS',
@@ -53,8 +55,7 @@ export async function onRequest(context) {
         const clash = await env.DB.prepare('SELECT id FROM vehicles WHERE reg_number = ? AND id != ?').bind(reg, sub.vehicle_id).first();
         if (clash) return bad(`Vehicle ${reg} is already registered`);
       }
-      const CAR_TYPES = ['Hatchback', 'Sedan', 'Compact SUV', 'Mid SUV', 'Large SUV', 'Luxury Car'];
-      if (d.car_type !== undefined && !CAR_TYPES.includes(d.car_type)) return bad('Invalid car type');
+      if (d.car_type !== undefined && !(await getCarTypes(env)).includes(d.car_type)) return bad('Invalid car type');
       const freq = d.frequency !== undefined ? Number(d.frequency) : sub.frequency;
       if (![1, 2, 4].includes(freq)) return bad('Invalid membership type');
       const used = d.washes_used !== undefined ? Number(d.washes_used) : undefined;

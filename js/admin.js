@@ -819,21 +819,36 @@ async function loadManage() {
   renderWaTemplates();
 }
 
+// "Add a row" line shown under each Manage pricing table
+function addRowLine(kind, placeholder, buttonLabel) {
+  return `
+    <div class="add-row-line">
+      <input type="text" data-add-row="${kind}" placeholder="${placeholder}" maxlength="60"
+        onkeydown="if(event.key==='Enter')addPricingRow('${kind}',this)">
+      <button class="btn btn-ghost btn-sm" onclick="addPricingRow('${kind}',this.previousElementSibling)">${buttonLabel}</button>
+    </div>
+    <div class="err add-row-err" data-add-row-err="${kind}"></div>`;
+}
+
+// Car type names go into inline handlers — escape quotes safely
+const jsArg = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
 function renderWashPrices() {
   if (!pricing) return;
   const wts = ['top', 'normal', 'foam'];
-  const headers = ['Car Type', 'Top Wash', 'Normal Wash', 'Foam Wash'];
+  const headers = ['Car Type', 'Top Wash', 'Normal Wash', 'Foam Wash', ''];
   let html = `<div class="tbl-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>`;
   pricing.car_types.forEach(ct => {
     html += `<tr><td>${ct}</td>`;
     wts.forEach(wt => {
       const price = pricing.wash?.[ct]?.[wt] ?? '';
-      html += `<td><input type="number" value="${price}" style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;"
-        onchange="savePriceCell(this,'wash','${ct}','${wt}')"></td>`;
+      html += `<td><input type="number" value="${price}" placeholder="—" style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;"
+        onchange="savePriceCell(this,'wash','${jsArg(ct)}','${wt}')"></td>`;
     });
-    html += '</tr>';
+    html += `<td><button class="btn btn-ghost btn-sm" title="Remove this car type from all price tables" onclick="removeCarType('${jsArg(ct)}')">✕</button></td></tr>`;
   });
   html += '</tbody></table></div>';
+  html += addRowLine('car_type', 'New car type, e.g. MUV', '+ Add car type');
   document.getElementById('wash-price-table').innerHTML = html;
 }
 
@@ -849,37 +864,88 @@ function renderMonthlyPrices() {
       html += `<tr><td style="font-size:12px;">${ct}</td>`;
       wts.forEach(wt => {
         const price = pricing.monthly?.[ct]?.[fr]?.[wt] ?? '';
-        html += `<td><input type="number" value="${price}" style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;"
-          onchange="savePriceCell(this,'monthly','${ct}','${wt}',${fr})"></td>`;
+        html += `<td><input type="number" value="${price}" placeholder="—" style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;"
+          onchange="savePriceCell(this,'monthly','${jsArg(ct)}','${wt}',${fr})"></td>`;
       });
       html += '</tr>';
     });
     html += '</tbody></table></div></div>';
   });
   html += '</div>';
+  html += addRowLine('car_type', 'New car type, e.g. MUV', '+ Add car type');
   document.getElementById('monthly-price-table').innerHTML = html;
 }
 
 function renderAddonPrices() {
   if (!pricing) return;
   const carTypes = pricing.car_types;
-  const html = pricing.addons.map(a => `
+  let html = pricing.addons.map(a => `
     <div style="margin-bottom:20px;">
-      <div style="font-weight:600;font-size:14px;color:var(--gold);margin-bottom:8px;">${a.name}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-weight:600;font-size:14px;color:var(--gold);">${a.name}</span>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;" title="Remove this add-on"
+          onclick="removeAddon(${a.id},'${jsArg(a.name)}')">✕</button>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">
         ${carTypes.map(ct => {
-          const p = pricing.addon_pricing?.[a.id]?.[ct] ?? a.base_price;
+          const p = pricing.addon_pricing?.[a.id]?.[ct] ?? '';
           return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;">
             <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">${ct}</div>
-            ₹<input type="number" value="${p}" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);padding:2px 4px;font-size:14px;"
-              onchange="saveAddonPriceCell(this,${a.id},'${ct}')">
+            ₹<input type="number" value="${p}" placeholder="—" style="width:70px;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);padding:2px 4px;font-size:14px;"
+              onchange="saveAddonPriceCell(this,${a.id},'${jsArg(ct)}')">
           </div>`;
         }).join('')}
       </div>
     </div>
   `).join('');
+  html += addRowLine('addon', 'New add-on, e.g. Headlight Restoration', '+ Add add-on');
   document.getElementById('addon-price-table').innerHTML = html;
 }
+
+// Re-fetch pricing and redraw everything that lists car types / add-ons
+async function refreshPricingViews() {
+  await loadPricing();
+  renderWashPrices();
+  renderMonthlyPrices();
+  renderAddonPrices();
+  const ctSel = document.getElementById('sub-car-type');
+  if (ctSel) { ctSel.innerHTML = ''; populateSubCarTypes(); }
+  const medSel = document.getElementById('med-car-type');
+  if (medSel) medSel.innerHTML = '';
+  const cpR = await apiRaw('/api/checkpoints', { headers: { 'X-Admin-Secret': SECRET } });
+  if (cpR.ok) renderCheckpointTemplates(await cpR.json());
+}
+
+window.addPricingRow = async function(kind, input) {
+  const errEl = document.querySelector(`[data-add-row-err="${kind}"]`);
+  const name = input.value.trim();
+  document.querySelectorAll(`[data-add-row-err="${kind}"]`).forEach(e => { e.textContent = ''; });
+  if (!name) { if (errEl) errEl.textContent = 'Enter a name first.'; return; }
+  const type = kind === 'car_type' ? 'add_car_type' : 'add_addon';
+  const r = await api('/api/pricing', { method: 'PUT', body: JSON.stringify({ type, name }) });
+  if (!r.ok) {
+    const msg = await r.text();
+    // Show the error under the input that was used
+    const own = input.parentElement?.nextElementSibling;
+    if (own) own.textContent = msg; else if (errEl) errEl.textContent = msg;
+    return;
+  }
+  await refreshPricingViews();
+};
+
+window.removeCarType = async function(ct) {
+  if (!confirm(`Remove "${ct}" and its prices from ALL tables (one-time, membership, add-ons)?`)) return;
+  const r = await api('/api/pricing', { method: 'PUT', body: JSON.stringify({ type: 'remove_car_type', car_type: ct }) });
+  if (!r.ok) { alert(await r.text()); return; }
+  await refreshPricingViews();
+};
+
+window.removeAddon = async function(id, name) {
+  if (!confirm(`Remove the add-on "${name}"? Past jobs keep it in their history.`)) return;
+  const r = await api('/api/pricing', { method: 'PUT', body: JSON.stringify({ type: 'remove_addon', addon_id: id }) });
+  if (!r.ok) { alert(await r.text()); return; }
+  await refreshPricingViews();
+};
 
 window.savePriceCell = async function(input, type, carType, washType, frequency) {
   const body = { type, car_type: carType, wash_type: washType, price: Number(input.value) };
@@ -910,10 +976,14 @@ window.saveSetting = async function(key, value) {
 
 function renderCheckpointTemplates(templates) {
   const serviceLabels = { top: 'Top Wash', normal: 'Normal Wash', foam: 'Foam Wash', interior: 'Dry Cleaning', rubbing: 'Full Rubbing', pickup_drop: 'Pickup & Drop' };
+  // Add-ons created in the Manage tab have addon_<id> checklists
+  (pricing?.addons || []).forEach(a => { serviceLabels[`addon_${a.id}`] = a.name; });
   const container = document.getElementById('checkpoint-templates');
   container.innerHTML = '';
 
   templates.forEach((t, ti) => {
+    // Hide checklists of add-ons that have since been removed
+    if (t.service_key.startsWith('addon_') && !serviceLabels[t.service_key]) return;
     const steps = JSON.parse(t.steps);
     const wrap = document.createElement('div');
     wrap.style.marginBottom = '16px';

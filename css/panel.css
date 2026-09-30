@@ -327,3 +327,12 @@ tr:hover td { background: var(--bg3); }
 }
 .med-section:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
 #member-edit-modal .modal { max-height: 90vh; overflow-y: auto; }
+
+/* "Add a row" line under the Manage pricing tables */
+.add-row-line { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.add-row-line input {
+  flex: 1; min-width: 0; background: var(--bg); border: 1px dashed var(--border);
+  color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 13px;
+}
+.add-row-line input:focus { border-style: solid; border-color: var(--gold); outline: none; }
+.add-row-err { font-size: 12px; margin-top: 4px; }
