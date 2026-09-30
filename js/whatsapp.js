@@ -95,13 +95,16 @@ export async function copyMemberMessage(sub, tplKey, extraVars = {}) {
 // wa.me — wa.me hands off to the desktop app via the whatsapp:// protocol,
 // which on some Windows versions decodes the text as ANSI and turns emoji
 // and line breaks into "?".
-function openWa(countryPhone, message) {
+export function waLink(countryPhone, message) {
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const text = encodeURIComponent(message);
-  const url = isMobile
+  return isMobile
     ? `https://wa.me/${countryPhone}?text=${text}`
     : `https://web.whatsapp.com/send?phone=${countryPhone}&text=${text}`;
+}
+
+function openWa(countryPhone, message) {
   const a = document.createElement('a');
-  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  a.href = waLink(countryPhone, message); a.target = '_blank'; a.rel = 'noopener';
   document.body.appendChild(a); a.click(); a.remove();
 }

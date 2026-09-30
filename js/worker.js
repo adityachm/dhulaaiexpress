@@ -1,25 +1,62 @@
-import { sendStatus, setAuthHeaders, loadSettings } from './whatsapp.js';
+import { setAuthHeaders, loadSettings, fillTemplate, waLink } from './whatsapp.js';
+
+// Worker panel — designed for staff who read little English:
+// one question per screen, pictures everywhere, big buttons, plain words.
 
 // ── State ──────────────────────────────────────────────────────────────
 let PIN = '';
 let pricing = null;
-let activeSub = null;
 let boardJobs = [];
+let currentStatus = 'received';
+let settings = {};   // WhatsApp templates, loaded once at start
 
-// ── Auth helpers ───────────────────────────────────────────────────────
+// ── Vocabulary (plain words + pictures) ────────────────────────────────
+const STATUS = {
+  received:    { icon: '⏳', name: 'Waiting',    help: 'Cars that came in. Tap ▶ when you start washing.' },
+  in_progress: { icon: '🧽', name: 'Washing',    help: 'Tick each step when done. Then tap ✅.' },
+  ready:       { icon: '✅', name: 'Ready',      help: 'Clean cars. Tap 🏁 when the customer takes the car.' },
+  delivered:   { icon: '🏁', name: 'Given back', help: 'Cars given back to customers today.' },
+};
+
+const WASHES = {
+  top:    { icon: '💧', name: 'Top wash',    desc: 'Quick outside wash' },
+  normal: { icon: '🧽', name: 'Normal wash', desc: 'Shampoo wash + glass inside & out' },
+  foam:   { icon: '🫧', name: 'Foam wash',   desc: 'Best wash — thick foam + tyre shine' },
+};
+
+// Car sizes with example models, so staff can match by car name
+const CAR_TYPE_INFO = {
+  'Hatchback':   { icon: '🚗', eg: 'Swift, i20, Alto' },
+  'Sedan':       { icon: '🚘', eg: 'City, Dzire, Verna' },
+  'Compact SUV': { icon: '🚙', eg: 'Nexon, Brezza, Venue' },
+  'Mid SUV':     { icon: '🚙', eg: 'Creta, Seltos, XUV300' },
+  'Large SUV':   { icon: '🛻', eg: 'Fortuner, XUV700, Scorpio' },
+  'Luxury Car':  { icon: '🏎️', eg: 'BMW, Audi, Mercedes' },
+};
+const carTypeInfo = ct => CAR_TYPE_INFO[ct] || { icon: '🚗', eg: '' };
+
+const COLORS = [
+  { name: 'White',  hex: '#f8fafc' }, { name: 'Silver', hex: '#c0c4cc' },
+  { name: 'Grey',   hex: '#6b7280' }, { name: 'Black',  hex: '#111111' },
+  { name: 'Red',    hex: '#dc2626' }, { name: 'Blue',   hex: '#2563eb' },
+  { name: 'Brown',  hex: '#7c4a2d' }, { name: 'Other',  hex: 'conic-gradient(#f43f5e,#f59e0b,#22c55e,#3b82f6,#a855f7,#f43f5e)' },
+];
+const colorHex = name => COLORS.find(c => c.name.toLowerCase() === String(name || '').trim().toLowerCase())?.hex;
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const rupees = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const $ = id => document.getElementById(id);
+
+// ── Auth ───────────────────────────────────────────────────────────────
 function api(path, opts = {}) {
-  return fetch(path, { ...opts, headers: { 'X-Worker-Pin': PIN, ...(opts.headers || {}) } });
+  return fetch(path, { ...opts, headers: { 'X-Worker-Pin': PIN, 'Content-Type': 'application/json', ...(opts.headers || {}) } });
 }
 
-// ── Session helpers ────────────────────────────────────────────────────
 const SESSION_KEY = 'dhulaai_worker_session';
 const SESSION_TTL = 12 * 60 * 60 * 1000; // 12 hours
 
 function saveSession(pin) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ pin, expiresAt: Date.now() + SESSION_TTL }));
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ pin, expiresAt: Date.now() + SESSION_TTL })); } catch {}
 }
 function restoreSession() {
   try {
@@ -29,454 +66,649 @@ function restoreSession() {
   return null;
 }
 
-// ── Boot ───────────────────────────────────────────────────────────────
-document.getElementById('login-form').addEventListener('submit', async e => {
+$('login-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const pin = document.getElementById('login-pin').value.trim();
-  const err = document.getElementById('login-err');
-  err.textContent = '';
+  const pin = $('login-pin').value.trim();
+  const err = $('login-err');
   const btn = e.target.querySelector('button');
+  err.textContent = '';
+  if (!pin) { err.textContent = 'Type your PIN first'; return; }
   btn.disabled = true; btn.textContent = 'Checking…';
-
-  const r = await fetch('/api/auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret: pin }),
-  });
-  const { role } = await r.json().catch(() => ({}));
-  if (role === 'worker' || role === 'admin') {
-    PIN = pin;
-    saveSession(pin);
-    enterDashboard();
-  } else {
+  try {
+    const r = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: pin }) });
+    const { role } = await r.json().catch(() => ({}));
+    if (role === 'worker' || role === 'admin') {
+      PIN = pin; saveSession(pin); await enterApp(); return;
+    }
     err.textContent = 'Wrong PIN. Try again.';
-    btn.disabled = false; btn.textContent = 'Enter';
+    $('login-pin').value = '';
+  } catch {
+    err.textContent = 'No internet. Check connection and try again.';
   }
+  btn.disabled = false; btn.textContent = 'Open ➜';
 });
 
-async function enterDashboard() {
+async function enterApp() {
   setAuthHeaders({ 'X-Worker-Pin': PIN });
-  document.getElementById('login-screen').classList.add('hidden');
-  document.getElementById('dashboard').classList.remove('hidden');
-  await init();
+  $('login-screen').classList.add('hidden');
+  $('dashboard').classList.remove('hidden');
+  try { currentStatus = sessionStorage.getItem('wk_status') || 'received'; } catch {}
+  await Promise.all([loadPricing(), loadBoard(), loadSettings().then(s => { settings = s || {}; })]);
+  resetWizard();
+  setInterval(() => { if ($('tab-board').classList.contains('active')) loadBoard(); }, 60000);
 }
 
-async function init() {
-  await Promise.all([loadPricing(), loadBoard(), loadSettings()]);
-  // Auto-refresh board every 60 seconds
-  setInterval(() => {
-    const activeTab = document.querySelector('.nav-tabs button.active')?.dataset?.tab;
-    if (activeTab === 'board') loadBoard();
-  }, 60000);
-}
-
-function logout() {
-  clearSession();
-  PIN = '';
+window.logout = function() {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
   location.reload();
-}
+};
 
-// Auto-restore session on load
 (async () => {
   const saved = restoreSession();
-  if (saved) {
-    PIN = saved;
-    await enterDashboard();
-  }
+  if (saved) { PIN = saved; await enterApp(); }
 })();
 
-// ── Tab switching ──────────────────────────────────────────────────────
-window.switchTab = function(tab, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  btn.classList.add('active');
+// ── Tabs ───────────────────────────────────────────────────────────────
+window.switchTab = function(tab) {
+  document.querySelectorAll('.wk-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.wk-bottom button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $(`tab-${tab}`).classList.add('active');
+  window.scrollTo(0, 0);
   if (tab === 'board') loadBoard();
+};
+
+window.goToBoard = function(status) {
+  if (status) currentStatus = status;
+  switchTab('board');
+  resetWizard();
 };
 
 // ── Pricing ────────────────────────────────────────────────────────────
 async function loadPricing() {
   const r = await api('/api/pricing');
-  if (!r.ok) return;
-  pricing = await r.json();
-
-  // Populate car type select
-  const sel = document.getElementById('f-car-type');
-  pricing.car_types.forEach(ct => {
-    const o = document.createElement('option');
-    o.value = ct; o.textContent = ct;
-    sel.appendChild(o);
-  });
-  sel.addEventListener('change', updatePrice);
-
-  // Populate add-ons (price auto-fills from car type selection)
-  const list = document.getElementById('addons-list');
-  list.innerHTML = '';
-  pricing.addons.forEach(addon => {
-    const row = document.createElement('div');
-    row.className = 'addon-row';
-    row.innerHTML = `
-      <input type="checkbox" id="addon-${addon.id}" value="${addon.id}" onchange="updatePrice()">
-      <label class="addon-name" for="addon-${addon.id}">${addon.name}</label>
-      <span id="addon-price-label-${addon.id}" style="color:var(--gold);font-size:13px;font-weight:600;margin-left:auto;">—</span>
-    `;
-    list.appendChild(row);
-  });
-
-  updatePrice();
+  if (r.ok) pricing = await r.json();
 }
 
-// ── Price calculation ──────────────────────────────────────────────────
-window.updatePrice = function() {
-  if (!pricing) return;
-  const carType = document.getElementById('f-car-type').value;
-  const mode = document.querySelector('input[name="svc-mode"]:checked')?.value || 'onetime';
-  let total = 0;
-
-  if (mode === 'onetime' && carType) {
-    const wt = document.getElementById('f-wash-type').value;
-    total = pricing.wash[carType]?.[wt] || 0;
-  } else if (mode === 'monthly' && carType) {
-    const freq = document.getElementById('f-frequency').value;
-    const wt = document.getElementById('f-monthly-wash').value;
-    total = pricing.monthly[carType]?.[Number(freq)]?.[wt] || 0;
-  } else if (mode === 'sub') {
-    total = 0; // covered by subscription
-  }
-
-  // Add-ons — price from car-type matrix
-  pricing.addons.forEach(addon => {
-    const addonPrice = (pricing.addon_pricing?.[addon.id]?.[carType]) ?? addon.base_price;
-    const label = document.getElementById(`addon-price-label-${addon.id}`);
-    if (label) label.textContent = carType ? `₹${addonPrice.toLocaleString('en-IN')}` : '—';
-    const cb = document.getElementById(`addon-${addon.id}`);
-    if (cb && cb.checked) total += addonPrice;
-  });
-
-  document.getElementById('price-display').textContent = `₹${total.toLocaleString('en-IN')}`;
-};
-
-window.onServiceModeChange = function() {
-  const mode = document.querySelector('input[name="svc-mode"]:checked')?.value;
-  document.getElementById('onetime-block').classList.toggle('hidden', mode !== 'onetime');
-  document.getElementById('monthly-block').classList.toggle('hidden', mode !== 'monthly');
-  // Payment mode
-  const paySelect = document.getElementById('f-payment');
-  if (mode === 'sub') {
-    paySelect.value = 'sub'; paySelect.disabled = true;
-  } else {
-    paySelect.disabled = false;
-    if (paySelect.value === 'sub') paySelect.value = 'cash';
-  }
-  updatePrice();
-};
-
-window.togglePickup = function() {
-  document.getElementById('pickup-block').classList.toggle('hidden', !document.getElementById('f-pickup').checked);
-};
-
-// ── Phone autofill ─────────────────────────────────────────────────────
-document.getElementById('f-phone').addEventListener('blur', async function() {
-  const phone = this.value.trim();
-  if (phone.length < 10) return;
-  const r = await api(`/api/customers?phone=${encodeURIComponent(phone)}`);
-  if (!r.ok) return;
-  const data = await r.json();
-  if (!data) { activeSub = null; hideSub(); return; }
-
-  document.getElementById('f-name').value = data.customer.name;
-
-  // Show all vehicles as selectable pills; auto-select if only one
-  if (data.vehicles && data.vehicles.length) {
-    if (data.vehicles.length === 1) {
-      fillVehicle(data.vehicles[0]);
-    } else {
-      renderVehiclePills(data.vehicles);
-    }
-  }
-
-  // Show membership status — one line per vehicle with an active plan
-  const subs = data.active_subscriptions || (data.active_subscription ? [data.active_subscription] : []);
-  activeSub = subs[0] || null;
-  if (subs.length) {
-    document.getElementById('sub-info').textContent = subs.map(s => {
-      const remaining = s.washes_total - s.washes_used;
-      const veh = s.reg_number ? `${s.reg_number}: ` : '';
-      return `${veh}${s.plan_label} — ${remaining} wash${remaining !== 1 ? 'es' : ''} left (expires ${s.end_date})`;
-    }).join('  ·  ');
-    document.getElementById('sub-banner').classList.remove('hidden');
-  } else {
-    hideSub();
-  }
-});
-
-function hideSub() {
-  document.getElementById('sub-banner').classList.add('hidden');
-}
-
-function fillVehicle(v) {
-  document.getElementById('f-reg').value   = v.reg_number;
-  document.getElementById('f-model').value = v.make_model;
-  document.getElementById('f-color').value = v.color;
-  document.getElementById('f-car-type').value = v.car_type;
-  clearVehiclePills();
-  updatePrice();
-}
-
-function renderVehiclePills(vehicles) {
-  let el = document.getElementById('vehicle-pills');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'vehicle-pills';
-    el.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;';
-    document.getElementById('f-reg').closest('.form-row').before(el);
-  }
-  el.innerHTML = `<div style="font-size:12px;color:var(--text2);width:100%;margin-bottom:4px;">Select vehicle:</div>` +
-    vehicles.map((v, i) => `
-      <button type="button" onclick="selectVehiclePill(${i})"
-        style="background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;text-align:left;">
-        <div style="font-weight:600;">${v.reg_number}</div>
-        <div style="font-size:11px;color:var(--text2);">${[v.make_model, v.color].filter(Boolean).join(' ') || v.car_type}</div>
-      </button>
-    `).join('');
-  el._vehicles = vehicles;
-}
-
-function clearVehiclePills() {
-  const el = document.getElementById('vehicle-pills');
-  if (el) el.remove();
-}
-
-window.selectVehiclePill = function(idx) {
-  const el = document.getElementById('vehicle-pills');
-  if (el) fillVehicle(el._vehicles[idx]);
-};
-
-// ── Reg number lookup — fills car details if vehicle already in system ─
-document.getElementById('f-reg').addEventListener('blur', async function() {
-  const reg = this.value.trim().toUpperCase();
-  if (!reg || reg.length < 4) return;
-  // Don't overwrite if already filled by vehicle pill selection
-  if (document.getElementById('f-model').value) return;
-  const r = await api(`/api/customers?reg=${encodeURIComponent(reg)}`);
-  if (!r.ok) return;
-  const vehicle = await r.json();
-  if (vehicle) {
-    document.getElementById('f-model').value = vehicle.make_model || '';
-    document.getElementById('f-color').value  = vehicle.color || '';
-    document.getElementById('f-car-type').value = vehicle.car_type || '';
-    updatePrice();
-    // Show a subtle note if different owner
-    if (vehicle.owner_name && !document.getElementById('f-name').value) {
-      document.getElementById('f-name').value = vehicle.owner_name;
-    }
-  }
-});
-
-// Autofill clears vehicle pills when phone changes
-document.getElementById('f-phone').addEventListener('input', function() {
-  clearVehiclePills();
-});
-
-// ── Form submit ────────────────────────────────────────────────────────
-document.getElementById('car-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const err = document.getElementById('form-err');
-  err.textContent = '';
-
-  const btn = e.target.querySelector('button[type="submit"]');
-  btn.disabled = true; btn.textContent = 'Creating…';
-
-  const mode = document.querySelector('input[name="svc-mode"]:checked')?.value || 'onetime';
-  const carType = document.getElementById('f-car-type').value;
-  // Monthly packages have one flat price (always stored as 'foam' in DB)
-  const washType = mode === 'monthly' ? 'foam' : document.getElementById('f-wash-type').value;
-
-  // Collect add-ons
-  const addons = [];
-  const addon_prices = {};
-  if (pricing) {
-    pricing.addons.forEach(addon => {
-      const cb = document.getElementById(`addon-${addon.id}`);
-      if (cb && cb.checked) {
-        const p = (pricing.addon_pricing?.[addon.id]?.[carType]) ?? addon.base_price;
-        addons.push({ id: addon.id, name: addon.name, base_price: p });
-        addon_prices[addon.id] = p;
-      }
-    });
-  }
-
-  const body = {
-    phone: document.getElementById('f-phone').value.trim(),
-    name: document.getElementById('f-name').value.trim(),
-    reg_number: document.getElementById('f-reg').value.trim(),
-    make_model: document.getElementById('f-model').value.trim(),
-    color: document.getElementById('f-color').value.trim(),
-    car_type: carType,
-    wash_type: washType,
-    is_monthly: mode === 'monthly',
-    frequency: mode === 'monthly' ? Number(document.getElementById('f-frequency').value) : null,
-    payment_mode: mode === 'sub' ? 'sub' : document.getElementById('f-payment').value,
-    pickup_drop: document.getElementById('f-pickup').checked,
-    pickup_address: document.getElementById('f-address')?.value.trim() || '',
-    notes: document.getElementById('f-notes').value.trim(),
-    addons,
-    addon_prices,
-  };
-
-  if (!body.phone || !body.name || !body.reg_number || !body.car_type) {
-    err.textContent = 'Phone, name, reg number and car type are required.';
-    btn.disabled = false; btn.textContent = 'Create Job'; return;
-  }
-
-  // Build WhatsApp status link BEFORE the fetch so it opens in the same user gesture
-  // (window.open after await is blocked by browsers)
-  const digits = body.phone.replace(/\D/g, '');
-  const e164 = digits.startsWith('91') ? digits : `91${digits}`;
-  const statusUrl = `${location.origin}/status?phone=${encodeURIComponent(body.phone)}`;
-  const vehicleDesc = [body.make_model, body.color].filter(Boolean).join(' ') || body.car_type;
-  const firstName = body.name.split(' ')[0];
-  const statusMsg = `Hi ${firstName}! Your ${vehicleDesc} (${body.reg_number.toUpperCase()}) has been checked in at Dhulaai Express 🚗\n\nTrack your car's wash status live here:\n${statusUrl}\n\nThank you for choosing us! 😊`;
-  const waWindow = window.open(`https://wa.me/${e164}?text=${encodeURIComponent(statusMsg)}`, '_blank', 'noopener');
-
-  const r = await api('/api/jobs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (r.ok) {
-    e.target.reset();
-    clearVehiclePills();
-    hideSub(); activeSub = null;
-    document.getElementById('price-display').textContent = '₹0';
-    switchTab('board', document.querySelector('[data-tab="board"]'));
-  } else {
-    if (waWindow) waWindow.close(); // close WhatsApp tab if job creation failed
-    const msg = await r.text();
-    err.textContent = msg || 'Failed to create job. Please try again.';
-  }
-
-  btn.disabled = false; btn.textContent = 'Create Job';
-});
-
-// ── Job Board ──────────────────────────────────────────────────────────
-window.loadBoard = async function() {
+// ══════════════════════════════════════════════════════════════════════
+//  CARS TODAY (job board)
+// ══════════════════════════════════════════════════════════════════════
+window.loadBoard = async function(manual) {
   const today = new Date().toISOString().split('T')[0];
-  const r = await api(`/api/jobs?date=${today}`);
-  if (!r.ok) return;
-  boardJobs = await r.json();
+  try {
+    const r = await api(`/api/jobs?date=${today}`);
+    if (!r.ok) return;
+    boardJobs = await r.json();
+    renderBoard();
+    if (manual) toast('List updated');
+  } catch {
+    if (manual) toast('No internet. Try again.');
+  }
+};
+
+window.showStatus = function(status) {
+  currentStatus = status;
+  try { sessionStorage.setItem('wk_status', status); } catch {}
   renderBoard();
 };
 
-function renderBoard() {
-  const cols = { received: [], in_progress: [], ready: [], delivered: [] };
-  boardJobs.forEach(j => { if (cols[j.status]) cols[j.status].push(j); });
+function renderBoard(flashId) {
+  const counts = { received: 0, in_progress: 0, ready: 0, delivered: 0 };
+  boardJobs.forEach(j => { if (counts[j.status] !== undefined) counts[j.status]++; });
 
-  Object.entries(cols).forEach(([status, jobs]) => {
-    const col = document.getElementById(`col-${status}`);
-    if (!col) return;
-    if (!jobs.length) { col.innerHTML = '<div class="empty-state text-sm">No cars</div>'; return; }
-    col.innerHTML = jobs.map(j => status === 'delivered' ? renderDeliveredCard(j) : renderJobCard(j)).join('');
+  document.querySelectorAll('.wk-status-tabs button').forEach(b => {
+    const s = b.dataset.status;
+    b.classList.toggle('active', s === currentStatus);
+    const cnt = $(`cnt-${s}`);
+    cnt.textContent = counts[s];
+    cnt.classList.toggle('has', counts[s] > 0);
   });
+  $('status-help').textContent = STATUS[currentStatus].help;
+
+  const jobs = boardJobs.filter(j => j.status === currentStatus);
+  const list = $('board-list');
+  if (!jobs.length) {
+    const st = STATUS[currentStatus];
+    list.innerHTML = `<div class="wk-empty"><div>${st.icon}</div>No cars in ${st.name}</div>`;
+    return;
+  }
+  list.innerHTML = jobs.map(cardHtml).join('');
+  if (flashId) {
+    const el = $(`job-${flashId}`);
+    if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+  }
 }
 
-function renderDeliveredCard(job) {
-  return `
-    <div class="job-card status-delivered" id="job-${job.id}" style="padding:12px 14px;">
-      <div class="jc-reg" style="font-size:15px;">${job.reg_number}</div>
-      <div class="jc-owner" style="font-size:12px;">${job.customer_name} · ${job.customer_phone}</div>
-      <div class="jc-svc" style="font-size:12px;color:var(--text2);">${job.services_summary}</div>
-    </div>
-  `;
+function plate(reg) {
+  return `<span class="wk-plate">${esc(reg)}</span>`;
 }
 
-function renderJobCard(job) {
-  const checkpoints = JSON.parse(job.checkpoints || '[]');
-  const primaryCp = checkpoints.find(c => ['top', 'normal', 'foam'].includes(c.service_key));
-  const totalSteps = checkpoints.reduce((s, c) => s + c.steps.length, 0);
-  const doneSteps = checkpoints.reduce((s, c) => s + c.steps.filter(st => st.done).length, 0);
+function carLine(job) {
+  const hex = colorHex(job.color);
+  const name = [job.color, job.make_model].filter(Boolean).join(' ') || job.car_type;
+  return `<div class="wk-car-line">
+    ${hex ? `<span class="wk-dot" style="background:${hex}"></span>` : ''}
+    <span>${carTypeInfo(job.car_type).icon} ${esc(name)}</span>
+  </div>`;
+}
 
-  const checkpointsHtml = checkpoints.map((cp, ci) => `
-    <div class="checkpoint-section">
-      <div class="checkpoint-service">
-        ${cp.label}
-        <span class="checkpoint-progress">${cp.steps.filter(s=>s.done).length}/${cp.steps.length}</span>
+function serviceChips(job) {
+  const chips = [];
+  const w = WASHES[job.wash_type];
+  if (job.subscription_id) chips.push(`<span class="wk-chip member">⭐ Member</span>`);
+  if (w) chips.push(`<span class="wk-chip">${w.icon} ${w.name}</span>`);
+  let addons = [];
+  try { addons = JSON.parse(job.addons || '[]'); } catch {}
+  addons.forEach(a => chips.push(`<span class="wk-chip">✨ ${esc(a.name)}</span>`));
+  if (job.pickup_drop) chips.push(`<span class="wk-chip">🚚 Pickup &amp; drop</span>`);
+  return `<div class="wk-chips">${chips.join('')}</div>`;
+}
+
+function minutesAgo(iso) {
+  if (!iso) return '';
+  const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso.replace(' ', 'T') + 'Z');
+  const m = Math.max(0, Math.floor((Date.now() - d) / 60000));
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  return `${Math.floor(m / 60)} hr ${m % 60} min ago`;
+}
+
+function cardHtml(job) {
+  const cps = JSON.parse(job.checkpoints || '[]');
+  const total = cps.reduce((s, c) => s + c.steps.length, 0);
+  const done = cps.reduce((s, c) => s + c.steps.filter(st => st.done).length, 0);
+  const mainWash = cps.find(c => ['top', 'normal', 'foam'].includes(c.service_key));
+  const canFinish = mainWash ? mainWash.steps.every(s => s.done) : true;
+
+  let middle = '';
+  if (job.status === 'in_progress') {
+    const pct = total ? Math.round(done / total * 100) : 100;
+    middle = `
+      <div class="wk-progress">
+        <div class="wk-progress-top"><span>Steps done</span><span>${done} of ${total}</span></div>
+        <div class="wk-bar ${done === total ? 'full' : ''}"><i style="width:${pct}%"></i></div>
       </div>
-      ${cp.steps.map((step, si) => `
-        <div class="checkpoint-item ${step.done ? 'done' : ''}" onclick="toggleStep(${job.id},${ci},${si},${!step.done})">
-          <input type="checkbox" ${step.done ? 'checked' : ''} onclick="event.stopPropagation();toggleStep(${job.id},${ci},${si},${!step.done})">
-          <span>${step.label}</span>
-        </div>
-      `).join('')}
-    </div>
-  `).join('');
+      ${cps.map((cp, ci) => `
+        <div class="wk-cp-title">${esc(cp.label)}</div>
+        ${cp.steps.map((st, si) => `
+          <button class="wk-step-row ${st.done ? 'done' : ''}" onclick="toggleStep(${job.id},${ci},${si},${!st.done})">
+            <span class="wk-tick">✓</span><span class="wk-step-label">${esc(st.label)}</span>
+          </button>`).join('')}
+      `).join('')}`;
+  }
 
-  const canMarkReady = primaryCp ? primaryCp.steps.every(s => s.done) : true;
-  const timeAgo = formatTime(job.created_at);
+  let action = '';
+  if (job.status === 'received') {
+    action = `<button class="wk-big-btn wk-blue" onclick="moveJob(${job.id},'in_progress')">▶ Start washing</button>`;
+  } else if (job.status === 'in_progress') {
+    action = canFinish
+      ? `<button class="wk-big-btn wk-green" onclick="moveJob(${job.id},'ready')">✅ Washing done</button>`
+      : `<div class="wk-blocked">⬆ Tick all wash steps first</div>
+         <button class="wk-big-btn wk-green" disabled>✅ Washing done</button>`;
+  } else if (job.status === 'ready') {
+    action = `<button class="wk-big-btn wk-gold" onclick="moveJob(${job.id},'delivered')">🏁 Customer took the car</button>`;
+  }
 
-  const actionsByStatus = {
-    received:    `<button class="btn btn-primary btn-full" onclick="changeStatus(${job.id},'in_progress')">▶ Start Wash</button>`,
-    in_progress: `<button class="btn btn-gold btn-full ${canMarkReady ? '' : 'disabled'}" onclick="changeStatus(${job.id},'ready')" ${canMarkReady ? '' : 'disabled title="Complete checklist first"'}>✓ Mark Ready</button>`,
-    ready:       `<button class="btn btn-green btn-full" onclick="changeStatus(${job.id},'delivered')">🏁 Mark Delivered</button>`,
-    delivered:   '',
+  return `
+    <article class="wk-card" data-status="${job.status}" id="job-${job.id}">
+      ${plate(job.reg_number)}
+      ${carLine(job)}
+      <div class="wk-owner">👤 ${esc(job.customer_name)} · 📞 ${esc(job.customer_phone)}</div>
+      ${serviceChips(job)}
+      ${job.pickup_address ? `<div class="wk-note">🏠 ${esc(job.pickup_address)}</div>` : ''}
+      ${job.notes ? `<div class="wk-note">📝 ${esc(job.notes)}</div>` : ''}
+      ${middle}
+      ${action}
+      <div class="wk-time">🕐 Came ${minutesAgo(job.created_at)}</div>
+    </article>`;
+}
+
+window.toggleStep = async function(jobId, ci, si, done) {
+  const job = boardJobs.find(j => j.id === jobId);
+  if (!job) return;
+  // Update the screen straight away; roll back if the save fails
+  const before = job.checkpoints;
+  const cps = JSON.parse(job.checkpoints || '[]');
+  cps[ci].steps[si].done = done;
+  job.checkpoints = JSON.stringify(cps);
+  renderBoard();
+  try {
+    const r = await api(`/api/jobs/${jobId}`, { method: 'PATCH', body: JSON.stringify({ checkpoint: { service_idx: ci, step_idx: si, done } }) });
+    if (!r.ok) throw new Error();
+    const res = await r.json();
+    job.checkpoints = JSON.stringify(res.checkpoints);
+  } catch {
+    job.checkpoints = before;
+    toast('Not saved — check internet');
+  }
+  renderBoard();
+};
+
+window.moveJob = function(jobId, to) {
+  const job = boardJobs.find(j => j.id === jobId);
+  if (!job) return;
+  if (to === 'delivered') {
+    confirmSheet(
+      `<div class="big">🏁</div><p>Did the customer take this car?</p>${plate(job.reg_number)}`,
+      'Yes, car given back',
+      () => doMove(job, to)
+    );
+    return;
+  }
+  doMove(job, to);
+};
+
+async function doMove(job, to, isUndo) {
+  const from = job.status;
+  try {
+    const r = await api(`/api/jobs/${job.id}`, { method: 'PATCH', body: JSON.stringify({ status: to }) });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      toast(data.error ? 'Tick all wash steps first' : 'Could not move the car. Try again.');
+      return;
+    }
+  } catch {
+    toast('No internet. Try again.');
+    return;
+  }
+  job.status = to;
+  currentStatus = to;
+  renderBoard(job.id);
+  const st = STATUS[to];
+  toast(`${job.reg_number} → ${st.icon} ${st.name}`, isUndo ? null : () => doMove(job, from, true));
+}
+
+// ── Toast & confirm sheet ──────────────────────────────────────────────
+let toastTimer;
+function toast(msg, undo) {
+  const t = $('toast'), btn = $('toast-undo');
+  $('toast-msg').textContent = msg;
+  btn.classList.toggle('hidden', !undo);
+  btn.onclick = () => { t.classList.add('hidden'); undo(); };
+  t.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), undo ? 7000 : 3000);
+}
+
+function confirmSheet(html, yesLabel, onYes) {
+  $('sheet-body').innerHTML = html;
+  const yes = $('sheet-yes');
+  yes.textContent = yesLabel;
+  yes.onclick = () => { closeSheet(); onYes(); };
+  $('sheet').classList.remove('hidden');
+}
+window.closeSheet = () => $('sheet').classList.add('hidden');
+
+// ══════════════════════════════════════════════════════════════════════
+//  NEW CAR (step-by-step)
+// ══════════════════════════════════════════════════════════════════════
+let draft;
+let history = [];
+const STEP_DOT = { phone: 'phone', name: 'car', pick: 'car', car: 'car', service: 'service', review: 'review', done: 'review' };
+const DOT_ORDER = ['phone', 'car', 'service', 'review'];
+
+function newDraft() {
+  return {
+    phone: '', customer: null, name: '', vehicles: [], subs: [],
+    vehicle: null,                     // an existing vehicle, or null for a new one
+    reg: '', carType: '', color: '', model: '',
+    service: '',                       // 'member' | 'top' | 'normal' | 'foam'
+    addons: new Set(), pickup: false, address: '',
+    pay: 'cash', notes: '',
+  };
+}
+
+window.resetWizard = function() {
+  draft = newDraft();
+  history = [];
+  ['w-phone', 'w-name', 'w-reg', 'w-model', 'w-address', 'w-notes'].forEach(id => { $(id).value = ''; });
+  document.querySelectorAll('#tab-new-car .wk-err').forEach(e => { e.textContent = ''; });
+  updatePhoneCounter();
+  show('phone');
+};
+
+function show(step) {
+  document.querySelectorAll('.wk-step').forEach(s => s.classList.toggle('active', s.dataset.step === step));
+  const dot = DOT_ORDER.indexOf(STEP_DOT[step]);
+  const dots = [...document.querySelectorAll('#wiz-steps span')];
+  const bars = [...document.querySelectorAll('#wiz-steps i')];
+  dots.forEach((d, i) => { d.classList.toggle('active', i === dot && step !== 'done'); d.classList.toggle('done', i < dot || step === 'done'); });
+  bars.forEach((b, i) => b.classList.toggle('done', i < dot || step === 'done'));
+  $('wiz-steps').classList.toggle('hidden', step === 'done');
+  window.scrollTo(0, 0);
+  const first = document.querySelector(`.wk-step[data-step="${step}"] input`);
+  if (first && !first.value && step !== 'car' && step !== 'service' && step !== 'review') setTimeout(() => first.focus(), 50);
+}
+
+function go(step) {
+  const current = document.querySelector('.wk-step.active')?.dataset.step;
+  if (current) history.push(current);
+  if (step === 'car') renderCarStep();
+  if (step === 'service') renderServiceStep();
+  if (step === 'review') renderReview();
+  show(step);
+}
+
+window.goBack = function() {
+  const prev = history.pop();
+  if (prev) show(prev);
+};
+
+// ── Step: phone ────────────────────────────────────────────────────────
+function phoneDigits() {
+  let d = $('w-phone').value.replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  return d;
+}
+function updatePhoneCounter() {
+  const n = phoneDigits().length;
+  const c = $('w-phone-count');
+  c.textContent = n === 10 ? '✓ 10 digits — good' : `${n} of 10 digits`;
+  c.classList.toggle('ok', n === 10);
+}
+$('w-phone').addEventListener('input', () => { $('err-phone').textContent = ''; updatePhoneCounter(); });
+$('w-phone').addEventListener('keydown', e => { if (e.key === 'Enter') stepPhoneNext(); });
+
+window.stepPhoneNext = async function() {
+  const phone = phoneDigits();
+  const err = $('err-phone');
+  if (phone.length !== 10) { err.textContent = 'Phone number must be 10 digits'; return; }
+  draft.phone = phone;
+  err.textContent = 'Checking…';
+  let data = null;
+  try {
+    const r = await api(`/api/customers?phone=${encodeURIComponent(phone)}`);
+    if (r.ok) data = await r.json();
+  } catch {
+    err.textContent = 'No internet. Try again.'; return;
+  }
+  err.textContent = '';
+
+  if (data && data.customer) {
+    draft.customer = data.customer;
+    draft.name = data.customer.name;
+    draft.vehicles = data.vehicles || [];
+    draft.subs = data.active_subscriptions || [];
+    if (draft.vehicles.length) { renderCarPicks(); go('pick'); }
+    else startNewCar();
+  } else {
+    draft.customer = null; draft.vehicles = []; draft.subs = [];
+    go('name');
+  }
+};
+
+// ── Step: name ─────────────────────────────────────────────────────────
+$('w-name').addEventListener('keydown', e => { if (e.key === 'Enter') stepNameNext(); });
+window.stepNameNext = function() {
+  const name = $('w-name').value.trim();
+  if (name.length < 2) { $('err-name').textContent = 'Type the customer name'; return; }
+  $('err-name').textContent = '';
+  draft.name = name;
+  startNewCar();
+};
+
+// ── Step: pick an existing car ─────────────────────────────────────────
+function memberFor(vehicle) {
+  if (!vehicle) return null;
+  return draft.subs.find(s =>
+    (s.vehicle_id === vehicle.id || s.vehicle_id == null) && s.washes_total - s.washes_used > 0) || null;
+}
+
+function renderCarPicks() {
+  $('w-hello').textContent = draft.name;
+  $('w-car-picks').innerHTML = draft.vehicles.map((v, i) => {
+    const m = memberFor(v);
+    const left = m ? m.washes_total - m.washes_used : 0;
+    return `<button class="wk-tile" onclick="pickCar(${i})" style="flex-direction:column;align-items:flex-start;">
+      ${plate(v.reg_number)}
+      ${carLine(v)}
+      ${m ? `<span class="wk-chip member" style="margin-top:8px;">⭐ Member · ${left} free wash${left === 1 ? '' : 'es'} left</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
+window.pickCar = function(i) {
+  const v = draft.vehicles[i];
+  Object.assign(draft, { vehicle: v, reg: v.reg_number, carType: v.car_type, color: v.color || '', model: v.make_model || '' });
+  draft.service = memberFor(v) ? 'member' : '';
+  go('service');
+};
+
+window.startNewCar = function() {
+  Object.assign(draft, { vehicle: null, reg: '', carType: '', color: '', model: '', service: '' });
+  $('w-reg').value = ''; $('w-model').value = '';
+  go('car');
+};
+
+// ── Step: new car details ──────────────────────────────────────────────
+function renderCarStep() {
+  $('w-reg').value = draft.reg;
+  $('w-model').value = draft.model;
+  $('err-reg').textContent = ''; $('err-type').textContent = '';
+
+  $('w-types').innerHTML = (pricing?.car_types || []).map(ct => {
+    const info = carTypeInfo(ct);
+    return `<button class="wk-tile ${draft.carType === ct ? 'selected' : ''}" onclick="pickType('${esc(ct).replace(/'/g, '&#39;')}')" data-type="${esc(ct)}">
+      <span class="wk-tile-icon">${info.icon}</span><b>${esc(ct)}</b>${info.eg ? `<small>${esc(info.eg)}</small>` : ''}
+    </button>`;
+  }).join('');
+
+  $('w-colors').innerHTML = COLORS.map(c => `
+    <button class="wk-swatch ${draft.color.toLowerCase() === c.name.toLowerCase() ? 'selected' : ''}" onclick="pickColor('${c.name}')">
+      <span class="wk-dot" style="background:${c.hex}"></span>${c.name}
+    </button>`).join('');
+}
+
+window.pickType = function(ct) {
+  draft.carType = ct;
+  $('err-type').textContent = '';
+  document.querySelectorAll('#w-types .wk-tile').forEach(t => t.classList.toggle('selected', t.dataset.type === ct));
+};
+
+window.pickColor = function(name) {
+  draft.color = draft.color === name ? '' : name;
+  document.querySelectorAll('#w-colors .wk-swatch').forEach(s => s.classList.toggle('selected', s.textContent.trim() === draft.color));
+};
+
+// Known car number? Fill in its size/colour/name automatically.
+$('w-reg').addEventListener('input', () => { $('err-reg').textContent = ''; });
+$('w-reg').addEventListener('blur', async () => {
+  const reg = normReg($('w-reg').value);
+  if (reg.length < 4) return;
+  try {
+    const r = await api(`/api/customers?reg=${encodeURIComponent(reg)}`);
+    const v = r.ok ? await r.json() : null;
+    if (!v) return;
+    if (v.car_type) pickType(v.car_type);
+    if (v.color && !draft.color) {
+      draft.color = v.color;
+      document.querySelectorAll('#w-colors .wk-swatch').forEach(s => s.classList.toggle('selected', s.textContent.trim().toLowerCase() === v.color.toLowerCase()));
+    }
+    if (v.make_model && !$('w-model').value) $('w-model').value = v.make_model;
+  } catch {}
+});
+
+const normReg = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+window.stepCarNext = function() {
+  const reg = normReg($('w-reg').value);
+  let bad = false;
+  if (reg.length < 4) { $('err-reg').textContent = 'Type the car number from the number plate'; bad = true; }
+  if (!draft.carType) { $('err-type').textContent = 'Tap the car size'; bad = true; }
+  if (bad) return;
+  // Maybe this "new" car is one of the customer's saved cars
+  const known = draft.vehicles.find(v => normReg(v.reg_number) === reg);
+  draft.vehicle = known || null;
+  draft.reg = reg;
+  draft.model = $('w-model').value.trim();
+  draft.service = memberFor(draft.vehicle) ? 'member' : '';
+  go('service');
+};
+
+// ── Step: service ──────────────────────────────────────────────────────
+function addonPrice(a) {
+  return pricing?.addon_pricing?.[a.id]?.[draft.carType] ?? a.base_price ?? 0;
+}
+
+function renderServiceStep() {
+  $('err-wash').textContent = '';
+  $('w-car-summary').innerHTML = `${plate(draft.reg)}<span>${carTypeInfo(draft.carType).icon} ${esc(draft.carType)}</span>`;
+
+  const m = memberFor(draft.vehicle);
+  if (m) {
+    const left = m.washes_total - m.washes_used;
+    $('w-member-box').innerHTML = `
+      <h2 class="wk-q">⭐ This car is a member</h2>
+      <button class="wk-tile member ${draft.service === 'member' ? 'selected' : ''}" onclick="pickService('member')">
+        <span class="wk-tile-icon">⭐</span>
+        <span class="wk-tile-body"><b>Member wash</b><small>${left} free wash${left === 1 ? '' : 'es'} left this month</small></span>
+        <span class="wk-price" style="color:var(--green)">FREE</span>
+      </button>`;
+    $('w-wash-q').textContent = '🧽 Or a paid wash:';
+  } else {
+    $('w-member-box').innerHTML = '';
+    $('w-wash-q').textContent = '🧽 Which wash?';
+  }
+
+  $('w-washes').innerHTML = Object.entries(WASHES).map(([key, w]) => {
+    const p = pricing?.wash?.[draft.carType]?.[key];
+    return `<button class="wk-tile ${draft.service === key ? 'selected' : ''}" onclick="pickService('${key}')">
+      <span class="wk-tile-icon">${w.icon}</span>
+      <span class="wk-tile-body"><b>${w.name}</b><small>${w.desc}</small></span>
+      <span class="wk-price">${p != null ? rupees(p) : '—'}</span>
+    </button>`;
+  }).join('');
+
+  $('w-addons').innerHTML = (pricing?.addons || []).map(a => `
+    <button class="wk-tile wk-toggle ${draft.addons.has(a.id) ? 'selected' : ''}" style="margin-top:0" onclick="toggleAddon(${a.id})">
+      <span class="wk-tile-icon">✨</span>
+      <span class="wk-tile-body"><b>${esc(a.name)}</b></span>
+      <span class="wk-price">+${rupees(addonPrice(a))}</span>
+      <span class="wk-check" aria-hidden="true"></span>
+    </button>`).join('');
+
+  $('w-pickup').classList.toggle('selected', draft.pickup);
+  $('w-address-wrap').classList.toggle('hidden', !draft.pickup);
+  $('w-address').value = draft.address;
+}
+
+window.pickService = function(s) { draft.service = s; renderServiceStep(); };
+window.toggleAddon = function(id) {
+  draft.addons.has(id) ? draft.addons.delete(id) : draft.addons.add(id);
+  renderServiceStep();
+};
+window.togglePickup = function() {
+  draft.address = $('w-address').value;
+  draft.pickup = !draft.pickup;
+  renderServiceStep();
+  if (draft.pickup) $('w-address').focus();
+};
+
+window.stepServiceNext = function() {
+  draft.address = $('w-address').value.trim();
+  if (!draft.service) { $('err-wash').textContent = 'Tap one wash'; $('err-wash').scrollIntoView({ block: 'center' }); return; }
+  if (draft.pickup && !draft.address) { $('err-wash').textContent = 'Type the pickup address, or turn off pickup'; return; }
+  go('review');
+};
+
+// ── Step: review ───────────────────────────────────────────────────────
+function totals() {
+  const lines = [];
+  if (draft.service === 'member') lines.push({ ic: '⭐', name: 'Member wash', amt: 0 });
+  else {
+    const w = WASHES[draft.service];
+    lines.push({ ic: w.icon, name: w.name, amt: pricing?.wash?.[draft.carType]?.[draft.service] || 0 });
+  }
+  (pricing?.addons || []).filter(a => draft.addons.has(a.id))
+    .forEach(a => lines.push({ ic: '✨', name: a.name, amt: addonPrice(a) }));
+  return { lines, total: lines.reduce((s, l) => s + Number(l.amt || 0), 0) };
+}
+
+function renderReview() {
+  const { lines, total } = totals();
+  const hex = colorHex(draft.color);
+  $('w-review').innerHTML = `
+    <div class="wk-review-row"><span class="ic">👤</span>${esc(draft.name)} · ${esc(draft.phone)}</div>
+    <div class="wk-review-row" style="flex-wrap:wrap">${plate(draft.reg)}
+      <span>${hex ? `<span class="wk-dot" style="display:inline-block;vertical-align:middle;background:${hex}"></span> ` : ''}${esc([draft.color, draft.model].filter(Boolean).join(' ') || draft.carType)}</span></div>
+    ${lines.map(l => `<div class="wk-review-row"><span class="ic">${l.ic}</span>${esc(l.name)}<span class="amt">${l.amt ? rupees(l.amt) : 'FREE'}</span></div>`).join('')}
+    ${draft.pickup ? `<div class="wk-review-row"><span class="ic">🚚</span>Pickup: ${esc(draft.address)}</div>` : ''}
+    <div class="wk-total ${total ? '' : 'free'}"><span>${total ? 'Take from customer' : 'Customer pays'}</span><b>${total ? rupees(total) : 'FREE'}</b></div>`;
+
+  // Nothing to collect → no payment question
+  $('w-pay-wrap').classList.toggle('hidden', total === 0);
+  setPay(draft.pay);
+  $('err-save').textContent = '';
+}
+
+window.setPay = function(p) {
+  draft.pay = p;
+  document.querySelectorAll('.wk-pay button').forEach(b => b.classList.toggle('selected', b.dataset.pay === p));
+};
+
+// ── Save ───────────────────────────────────────────────────────────────
+window.saveCar = async function() {
+  const btn = $('w-save'), err = $('err-save');
+  err.textContent = '';
+  draft.notes = $('w-notes').value.trim();
+  const isMember = draft.service === 'member';
+  const carType = draft.carType;
+
+  const addons = [], addon_prices = {};
+  (pricing?.addons || []).filter(a => draft.addons.has(a.id)).forEach(a => {
+    const p = addonPrice(a);
+    addons.push({ id: a.id, name: a.name, base_price: p });
+    addon_prices[a.id] = p;
+  });
+
+  const body = {
+    phone: draft.phone,
+    name: draft.name,
+    reg_number: draft.reg,
+    make_model: draft.model,
+    color: draft.color,
+    car_type: carType,
+    // Member washes are recorded as foam; the membership covers the cost
+    wash_type: isMember ? 'foam' : draft.service,
+    is_monthly: false,
+    frequency: null,
+    payment_mode: isMember ? 'sub' : draft.pay,
+    pickup_drop: draft.pickup,
+    pickup_address: draft.pickup ? draft.address : '',
+    notes: draft.notes,
+    addons, addon_prices,
   };
 
-  return `
-    <div class="job-card status-${job.status}" id="job-${job.id}">
-      <div class="jc-reg">${job.reg_number}</div>
-      <div class="jc-owner">${job.customer_name} · ${job.customer_phone}</div>
-      <div class="jc-svc">${job.services_summary}</div>
-      <div class="jc-time">🕐 ${timeAgo} · Steps: ${doneSteps}/${totalSteps}</div>
-      ${checkpointsHtml}
-      <div class="jc-actions">
-        ${actionsByStatus[job.status] || ''}
-      </div>
-    </div>
-  `;
-}
+  // Open WhatsApp now, inside the tap — no awaits before this line,
+  // phone browsers block pop-ups that don't open straight away
+  const statusUrl = `${location.origin}/status?phone=${encodeURIComponent(draft.phone)}`;
+  const carDesc = [draft.color, draft.model].filter(Boolean).join(' ') || carType;
+  const msg = settings.tpl_received
+    ? fillTemplate(settings.tpl_received, { name: draft.name.split(' ')[0], car: carDesc, reg: draft.reg, status_url: statusUrl, amount: '' })
+    : `Hi ${draft.name.split(' ')[0]}! Your ${carDesc} (${draft.reg}) has been checked in at Dhulaai Express 🚗\n\nTrack your car's wash status live here:\n${statusUrl}\n\nThank you for choosing us! 😊`;
+  const waWindow = window.open(waLink(`91${draft.phone}`, msg), '_blank', 'noopener');
 
-window.toggleStep = async function(jobId, serviceIdx, stepIdx, done) {
-  const r = await api(`/api/jobs/${jobId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ checkpoint: { service_idx: serviceIdx, step_idx: stepIdx, done } }),
-  });
-  if (r.ok) {
-    const { checkpoints } = await r.json();
-    const job = boardJobs.find(j => j.id === jobId);
-    if (job) { job.checkpoints = JSON.stringify(checkpoints); renderBoard(); }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  let ok = false, reason = '';
+  try {
+    const r = await api('/api/jobs', { method: 'POST', body: JSON.stringify(body) });
+    ok = r.ok;
+    if (!ok) reason = await r.text();
+  } catch {
+    reason = 'No internet. Check connection and tap Save again.';
   }
-};
+  btn.disabled = false; btn.textContent = '✅ Save car';
 
-window.changeStatus = async function(jobId, status) {
-  const r = await api(`/api/jobs/${jobId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
-  });
-  if (r.ok) {
-    const job = boardJobs.find(j => j.id === jobId);
-    if (job) { job.status = status; renderBoard(); }
-  } else {
-    const data = await r.json().catch(() => ({}));
-    alert(data.error || 'Could not update status.');
+  if (!ok) {
+    if (waWindow) waWindow.close();
+    err.textContent = /membership/i.test(reason)
+      ? 'This car has no free member wash left. Go back and pick a paid wash.'
+      : (reason && reason.length < 120 ? reason : 'Could not save. Try again.');
+    return;
   }
-};
 
-window.sendWA = async function(jobId, statusKey) {
-  const job = boardJobs.find(j => j.id === jobId);
-  if (job) await sendStatus(job, statusKey);
+  $('w-done-plate').innerHTML = plate(draft.reg);
+  history = [];
+  show('done');
+  loadBoard();
 };
-
-// ── Utilities ──────────────────────────────────────────────────────────
-function formatTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = Math.floor((now - d) / 60000);
-  if (diff < 1) return 'just now';
-  if (diff < 60) return `${diff}m ago`;
-  const h = Math.floor(diff / 60);
-  return `${h}h ${diff % 60}m ago`;
-}

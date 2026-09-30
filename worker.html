@@ -2,194 +2,198 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dhulaai Express — Worker Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e1a">
+  <title>Dhulaai Express — Worker</title>
   <link rel="stylesheet" href="/css/panel.css">
+  <link rel="stylesheet" href="/css/worker.css">
 </head>
-<body>
+<body class="wk">
 
 <!-- ── Login ──────────────────────────────────────────────────────────── -->
-<div id="login-screen" class="login-screen">
-  <div class="login-card">
-    <div class="logo">🚗 Dhulaai Express</div>
-    <div class="sub">Worker Panel — Enter your PIN</div>
+<div id="login-screen" class="wk-login">
+  <div class="wk-login-card">
+    <div class="wk-login-icon">🔒</div>
+    <div class="wk-login-brand">Dhulaai Express</div>
+    <div class="wk-login-sub">Type your PIN</div>
     <form id="login-form">
-      <div id="login-err" class="err"></div>
-      <input id="login-pin" type="number" placeholder="• • • • • •" autocomplete="off" maxlength="6">
-      <button type="submit" class="btn btn-gold btn-full">Enter</button>
+      <input id="login-pin" type="password" inputmode="numeric" pattern="[0-9]*"
+        placeholder="• • • •" autocomplete="off" maxlength="8" aria-label="PIN">
+      <div id="login-err" class="wk-err"></div>
+      <button type="submit" class="wk-big-btn wk-gold">Open ➜</button>
     </form>
   </div>
 </div>
 
-<!-- ── Dashboard ──────────────────────────────────────────────────────── -->
+<!-- ── App ────────────────────────────────────────────────────────────── -->
 <div id="dashboard" class="hidden">
 
-  <div class="topbar">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span class="brand">Dhulaai Express</span>
-      <span class="role-badge">Worker</span>
+  <header class="wk-top">
+    <span class="wk-brand">🚗 Dhulaai Express</span>
+    <button class="wk-logout" onclick="logout()" aria-label="Log out">⏻ Exit</button>
+  </header>
+
+  <!-- ═══ CARS TODAY ═══════════════════════════════════════════════════ -->
+  <main id="tab-board" class="wk-page active">
+    <div class="wk-status-tabs" role="tablist">
+      <button data-status="received"    onclick="showStatus('received')"><span class="i">⏳</span><span class="t">Waiting</span><b id="cnt-received">0</b></button>
+      <button data-status="in_progress" onclick="showStatus('in_progress')"><span class="i">🧽</span><span class="t">Washing</span><b id="cnt-in_progress">0</b></button>
+      <button data-status="ready"       onclick="showStatus('ready')"><span class="i">✅</span><span class="t">Ready</span><b id="cnt-ready">0</b></button>
+      <button data-status="delivered"   onclick="showStatus('delivered')"><span class="i">🏁</span><span class="t">Given back</span><b id="cnt-delivered">0</b></button>
     </div>
-    <div class="nav-tabs">
-      <button class="active" data-tab="board" onclick="switchTab('board',this)">Job Board</button>
-      <button data-tab="new-car" onclick="switchTab('new-car',this)">+ New Car</button>
+    <p id="status-help" class="wk-help"></p>
+    <div id="board-list" class="wk-card-list"></div>
+    <button class="wk-refresh" onclick="loadBoard(true)">↻ Refresh list</button>
+  </main>
+
+  <!-- ═══ NEW CAR (step by step) ═══════════════════════════════════════ -->
+  <main id="tab-new-car" class="wk-page">
+
+    <div class="wk-steps" id="wiz-steps">
+      <span data-step="phone">📱</span><i></i>
+      <span data-step="car">🚗</span><i></i>
+      <span data-step="service">🧽</span><i></i>
+      <span data-step="review">✅</span>
     </div>
-    <button class="logout" onclick="logout()">Logout</button>
+
+    <!-- STEP: phone -->
+    <section class="wk-step" data-step="phone">
+      <h2 class="wk-q">📱 Customer phone number</h2>
+      <input id="w-phone" class="wk-input wk-input-xl" type="tel" inputmode="numeric" maxlength="10"
+        placeholder="98765 43210" autocomplete="off">
+      <div class="wk-counter" id="w-phone-count">0 of 10 digits</div>
+      <div class="wk-err" id="err-phone"></div>
+      <button class="wk-big-btn wk-gold" onclick="stepPhoneNext()">Next ➜</button>
+    </section>
+
+    <!-- STEP: customer name (new customers only) -->
+    <section class="wk-step" data-step="name">
+      <h2 class="wk-q">👤 Customer name</h2>
+      <p class="wk-help">New customer. Ask their name.</p>
+      <input id="w-name" class="wk-input wk-input-xl" type="text" placeholder="Ramesh Kumar" autocomplete="off">
+      <div class="wk-err" id="err-name"></div>
+      <div class="wk-nav">
+        <button class="wk-back" onclick="goBack()">⬅ Back</button>
+        <button class="wk-big-btn wk-gold" onclick="stepNameNext()">Next ➜</button>
+      </div>
+    </section>
+
+    <!-- STEP: pick one of the customer's cars -->
+    <section class="wk-step" data-step="pick">
+      <h2 class="wk-q">👋 <span id="w-hello"></span></h2>
+      <p class="wk-help">Which car came today? Tap it.</p>
+      <div id="w-car-picks" class="wk-card-list"></div>
+      <button class="wk-tile wk-tile-add" onclick="startNewCar()">➕ A different car</button>
+      <div class="wk-nav">
+        <button class="wk-back" onclick="goBack()">⬅ Back</button>
+      </div>
+    </section>
+
+    <!-- STEP: new car details -->
+    <section class="wk-step" data-step="car">
+      <h2 class="wk-q">🚗 Car number</h2>
+      <div class="wk-plate-input">
+        <input id="w-reg" type="text" placeholder="UK07 AB 1234" autocomplete="off" autocapitalize="characters">
+      </div>
+      <div class="wk-err" id="err-reg"></div>
+
+      <h2 class="wk-q">📏 Car size</h2>
+      <div id="w-types" class="wk-grid"></div>
+      <div class="wk-err" id="err-type"></div>
+
+      <h2 class="wk-q">🎨 Car colour</h2>
+      <div id="w-colors" class="wk-swatches"></div>
+
+      <h2 class="wk-q wk-q-sm">Car name <span class="wk-opt">(if you know)</span></h2>
+      <input id="w-model" class="wk-input" type="text" placeholder="Swift, Creta, City…" autocomplete="off">
+
+      <div class="wk-nav">
+        <button class="wk-back" onclick="goBack()">⬅ Back</button>
+        <button class="wk-big-btn wk-gold" onclick="stepCarNext()">Next ➜</button>
+      </div>
+    </section>
+
+    <!-- STEP: service -->
+    <section class="wk-step" data-step="service">
+      <div id="w-car-summary" class="wk-mini-car"></div>
+
+      <div id="w-member-box"></div>
+
+      <h2 class="wk-q" id="w-wash-q">🧽 Which wash?</h2>
+      <div id="w-washes" class="wk-list"></div>
+      <div class="wk-err" id="err-wash"></div>
+
+      <h2 class="wk-q">✨ Extra work <span class="wk-opt">(only if customer asked)</span></h2>
+      <div id="w-addons" class="wk-list"></div>
+
+      <button id="w-pickup" class="wk-tile wk-toggle" onclick="togglePickup()">
+        <span class="wk-tile-icon">🚚</span>
+        <span class="wk-tile-body"><b>Pickup &amp; drop</b><small>We bring the car from home</small></span>
+        <span class="wk-check" aria-hidden="true"></span>
+      </button>
+      <div id="w-address-wrap" class="hidden">
+        <input id="w-address" class="wk-input" type="text" placeholder="🏠 House / flat, area, landmark">
+      </div>
+
+      <div class="wk-nav">
+        <button class="wk-back" onclick="goBack()">⬅ Back</button>
+        <button class="wk-big-btn wk-gold" onclick="stepServiceNext()">Next ➜</button>
+      </div>
+    </section>
+
+    <!-- STEP: review & save -->
+    <section class="wk-step" data-step="review">
+      <h2 class="wk-q">✅ Check and save</h2>
+      <div id="w-review" class="wk-review"></div>
+
+      <div id="w-pay-wrap">
+        <h2 class="wk-q wk-q-sm">How will they pay?</h2>
+        <div class="wk-pay">
+          <button data-pay="cash" onclick="setPay('cash')"><span>💵</span>Cash</button>
+          <button data-pay="upi"  onclick="setPay('upi')"><span>📲</span>UPI</button>
+        </div>
+      </div>
+
+      <h2 class="wk-q wk-q-sm">📝 Anything special? <span class="wk-opt">(optional)</span></h2>
+      <input id="w-notes" class="wk-input" type="text" placeholder="e.g. scratch on door, keys in office">
+
+      <div class="wk-err" id="err-save"></div>
+      <div class="wk-nav">
+        <button class="wk-back" onclick="goBack()">⬅ Back</button>
+        <button id="w-save" class="wk-big-btn wk-green" onclick="saveCar()">✅ Save car</button>
+      </div>
+    </section>
+
+    <!-- STEP: done -->
+    <section class="wk-step wk-done" data-step="done">
+      <div class="wk-done-icon">✅</div>
+      <h2>Car saved!</h2>
+      <div id="w-done-plate"></div>
+      <p class="wk-help">It is now in <b>⏳ Waiting</b>.</p>
+      <p class="wk-wa-hint">📲 WhatsApp opened — press <b>Send ➤</b> to tell the customer.</p>
+      <button class="wk-big-btn wk-gold" onclick="goToBoard('received')">🚗 See cars</button>
+      <button class="wk-big-btn wk-ghost" onclick="resetWizard()">➕ Add another car</button>
+    </section>
+  </main>
+
+  <!-- Bottom navigation -->
+  <nav class="wk-bottom">
+    <button class="active" data-tab="board" onclick="switchTab('board')"><span>🚗</span>Cars today</button>
+    <button data-tab="new-car" onclick="switchTab('new-car')"><span>➕</span>New car</button>
+  </nav>
+
+  <!-- Toast with undo -->
+  <div id="toast" class="wk-toast hidden" role="status">
+    <span id="toast-msg"></span>
+    <button id="toast-undo" class="hidden">↩ Undo</button>
   </div>
 
-  <!-- ── Job Board ─────────────────────────────────────────────────── -->
-  <div id="tab-board" class="page active">
-    <div class="section-header">
-      <h2>Live Job Board</h2>
-      <button class="btn btn-ghost btn-sm" onclick="loadBoard()">↻ Refresh</button>
-    </div>
-    <div class="board" id="board">
-      <div>
-        <div class="column-title"><span class="dot dot-received"></span>Received</div>
-        <div id="col-received"><div class="empty-state text-sm">No cars</div></div>
-      </div>
-      <div>
-        <div class="column-title"><span class="dot dot-in_progress"></span>In Progress</div>
-        <div id="col-in_progress"><div class="empty-state text-sm">No cars</div></div>
-      </div>
-      <div>
-        <div class="column-title"><span class="dot dot-ready"></span>Ready</div>
-        <div id="col-ready"><div class="empty-state text-sm">No cars</div></div>
-      </div>
-      <div>
-        <div class="column-title"><span class="dot dot-delivered"></span>Delivered Today</div>
-        <div id="col-delivered"><div class="empty-state text-sm">No cars</div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── New Car Form ───────────────────────────────────────────────── -->
-  <div id="tab-new-car" class="page">
-    <div class="section-header">
-      <h2>New Car Entry</h2>
-    </div>
-
-    <div style="max-width:600px;">
-      <div id="sub-banner" class="hidden card mt8 mb8" style="border-color:var(--green);margin-bottom:14px;">
-        <span class="sub-active">✓ Member: </span><span id="sub-info"></span>
-      </div>
-      <div id="form-err" class="err"></div>
-
-      <form id="car-form" autocomplete="off">
-
-        <div class="form-group">
-          <label>Customer Phone *</label>
-          <input id="f-phone" type="tel" placeholder="9876543210" required>
-        </div>
-
-        <div class="form-group">
-          <label>Owner Name *</label>
-          <input id="f-name" type="text" placeholder="Ramesh Kumar" required>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Reg Number *</label>
-            <input id="f-reg" type="text" placeholder="UK07 AB 1234" required style="text-transform:uppercase;">
-          </div>
-          <div class="form-group">
-            <label>Make / Model</label>
-            <input id="f-model" type="text" placeholder="Swift, Creta, …">
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Colour</label>
-            <input id="f-color" type="text" placeholder="White, Silver, …">
-          </div>
-          <div class="form-group">
-            <label>Car Type *</label>
-            <select id="f-car-type" required>
-              <option value="">— Select —</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Service selection -->
-        <div class="form-group">
-          <label>Service Type</label>
-          <div class="toggle-row">
-            <input type="radio" id="svc-onetime" name="svc-mode" value="onetime" checked onchange="onServiceModeChange()">
-            <label for="svc-onetime">One-time Wash</label>
-            <input type="radio" id="svc-monthly" name="svc-mode" value="monthly" onchange="onServiceModeChange()">
-            <label for="svc-monthly">Monthly Package</label>
-            <input type="radio" id="svc-sub" name="svc-mode" value="sub" onchange="onServiceModeChange()">
-            <label for="svc-sub">Member Wash</label>
-          </div>
-        </div>
-
-        <!-- One-time wash -->
-        <div id="onetime-block">
-          <div class="form-group">
-            <label>Wash Type</label>
-            <select id="f-wash-type" onchange="updatePrice()">
-              <option value="top">Top Wash (Exterior)</option>
-              <option value="normal">Normal Wash (Exterior)</option>
-              <option value="foam">Foam Wash (Premium)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Monthly package -->
-        <div id="monthly-block" class="hidden">
-          <div class="form-row">
-            <div class="form-group">
-              <label>Frequency</label>
-              <select id="f-frequency" onchange="updatePrice()">
-                <option value="1">1 Wash / Month</option>
-                <option value="2">2 Washes / Month</option>
-                <option value="4">4 Washes / Month</option>
-              </select>
-            </div>
-            <!-- monthly packages have a single flat price, no wash type selector -->
-            <input type="hidden" id="f-monthly-wash" value="foam">
-          </div>
-        </div>
-
-        <!-- Add-ons -->
-        <div class="form-group">
-          <label>Add-on Services</label>
-          <div id="addons-list"></div>
-        </div>
-
-        <!-- Pickup & Drop -->
-        <div class="toggle-row">
-          <input type="checkbox" id="f-pickup" onchange="togglePickup()">
-          <label for="f-pickup">Pickup &amp; Drop Service</label>
-        </div>
-        <div id="pickup-block" class="form-group hidden">
-          <label>Pickup Address</label>
-          <textarea id="f-address" rows="2" placeholder="House/Flat no, area, landmark…"></textarea>
-        </div>
-
-        <!-- Payment mode -->
-        <div class="form-group">
-          <label>Payment Mode</label>
-          <select id="f-payment">
-            <option value="cash">Cash</option>
-            <option value="upi">UPI</option>
-          </select>
-        </div>
-
-        <!-- Notes -->
-        <div class="form-group">
-          <label>Notes</label>
-          <input id="f-notes" type="text" placeholder="Any special instructions…">
-        </div>
-
-        <!-- Price display -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-          <span class="text-muted">Estimated Total:</span>
-          <span id="price-display" class="price-badge">₹0</span>
-        </div>
-
-        <button type="submit" class="btn btn-gold btn-full">Create Job</button>
-      </form>
+  <!-- Confirm sheet -->
+  <div id="sheet" class="wk-sheet-overlay hidden">
+    <div class="wk-sheet">
+      <div id="sheet-body"></div>
+      <button id="sheet-yes" class="wk-big-btn wk-green">Yes</button>
+      <button class="wk-big-btn wk-ghost" onclick="closeSheet()">No, go back</button>
     </div>
   </div>
 </div>
